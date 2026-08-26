@@ -32,7 +32,7 @@ Ademas de reducir la dependencia de servicios externos, este enfoque facilita la
 
 El problema afecta principalmente a dos grupos de usuarios. Las problematicas seran validadas mediante entrevistas o relevamientos a operadores independientes, identificando las herramientas que utilizan actualmente, el flujo de trabajo habitual y las principales dificultades encontradas durante el analisis de mercado.
 
-#### Operadores independientes que analizan informacion financiera para la toma de decisiones
+#### Operadores independientes que analizan informacion financiera para la toma de decisiones:
 
 <table width="100%">
   <thead>
@@ -69,7 +69,7 @@ El problema afecta principalmente a dos grupos de usuarios. Las problematicas se
   </tbody>
 </table>
 
-#### Desarrolladores o analistas que desean crear herramientas propias sobre datos de mercado
+#### Desarrolladores o analistas que desean crear herramientas propias sobre datos de mercado:
 
 <table width="100%">
   <thead>
@@ -104,7 +104,7 @@ La propuesta consiste en desarrollar un sistema modular de monitoreo y analisis 
 
 Si bien se implementara una interfaz de terminal inicial, el foco sera preparar el sustrato modular para permitir la mayor extension y modificacion posible. Por eso, el objetivo no es competir con plataformas existentes como TradingView a traves de la cantidad de herramientas incorporadas.
 
-### Producto minimo viable y vision de evolucion
+#### Producto minimo viable y vision de evolucion:
 
 <table width="100%">
   <thead>
