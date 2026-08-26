@@ -34,23 +34,69 @@ El problema afecta principalmente a dos grupos de usuarios. Las problematicas se
 
 #### Operadores independientes que analizan informacion financiera para la toma de decisiones
 
-| Necesidades | Problemas actuales |
-|---|---|
-| Visualizar precios en tiempo real | Uso de multiples plataformas simultaneas |
-| Analizar indicadores tecnicos | Indicadores limitados por software comercial |
-| Configurar alertas personalizadas | Dependencia de servicios externos |
-| Comparar distintos mercados | Informacion distribuida |
-| Registrar operaciones y observaciones | Falta de integracion entre analisis e historicos |
-| Crear metricas propias | Barreras tecnicas en herramientas existentes |
+<table width="100%">
+  <thead>
+    <tr>
+      <th width="50%">Necesidades<img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==" width="400" height="1"></th>
+      <th width="50%">Problemas actuales<img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==" width="400" height="1"></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Visualizar precios en tiempo real</td>
+      <td>Uso de multiples plataformas simultaneas</td>
+    </tr>
+    <tr>
+      <td>Analizar indicadores tecnicos</td>
+      <td>Indicadores limitados por software comercial</td>
+    </tr>
+    <tr>
+      <td>Configurar alertas personalizadas</td>
+      <td>Dependencia de servicios externos</td>
+    </tr>
+    <tr>
+      <td>Comparar distintos mercados</td>
+      <td>Informacion distribuida</td>
+    </tr>
+    <tr>
+      <td>Registrar operaciones y observaciones</td>
+      <td>Falta de integracion entre analisis e historicos</td>
+    </tr>
+    <tr>
+      <td>Crear metricas propias</td>
+      <td>Barreras tecnicas en herramientas existentes</td>
+    </tr>
+  </tbody>
+</table>
 
 #### Desarrolladores o analistas que desean crear herramientas propias sobre datos de mercado
 
-| Necesidades | Problemas actuales |
-|---|---|
-| Acceder a datos de mercado sin procesar | APIs fragmentadas entre proveedores |
-| Probar estrategias | Necesidad de construir infraestructura propia |
-| Visualizar resultados | Falta de integracion entre analisis y visualizacion |
-| Extender funcionalidades con codigo | Plataformas cerradas con poca configuracion |
+<table width="100%">
+  <thead>
+    <tr>
+      <th width="50%">Necesidades<img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==" width="400" height="1"></th>
+      <th width="50%">Problemas actuales<img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==" width="400" height="1"></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Acceder a datos de mercado sin procesar</td>
+      <td>APIs fragmentadas entre proveedores</td>
+    </tr>
+    <tr>
+      <td>Probar estrategias</td>
+      <td>Necesidad de construir infraestructura propia</td>
+    </tr>
+    <tr>
+      <td>Visualizar resultados</td>
+      <td>Falta de integracion entre analisis y visualizacion</td>
+    </tr>
+    <tr>
+      <td>Extender funcionalidades con codigo</td>
+      <td>Plataformas cerradas con poca configuracion</td>
+    </tr>
+  </tbody>
+</table>
 
 ## Parte Dos - Propuesta de solucion
 
@@ -60,14 +106,40 @@ Si bien se implementara una interfaz de terminal inicial, el foco sera preparar 
 
 ### Producto minimo viable y vision de evolucion
 
-| Producto minimo viable | Vision de evolucion |
-|---|---|
-| Conexion con exchanges mediante APIs y WebSockets | API documentada para acceso a datos |
-| Recepcion y procesamiento en tiempo real | Integracion de fuentes propias, como feeds RSS |
-| Generacion de graficos de velas con indicadores | Desarrollo de estrategias automatizadas |
-| Implementacion de indicadores basicos | Creacion de indicadores personalizados con JavaScript |
-| Sistema de alertas configurables | Interfaz modular, extensible y personalizable |
-| Registro de operaciones y observaciones personalizadas | Analisis historico de operaciones con calculo de metricas personalizadas, como EV y win rate |
+<table width="100%">
+  <thead>
+    <tr>
+      <th width="50%">Producto minimo viable<img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==" width="400" height="1"></th>
+      <th width="50%">Vision de evolucion<img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==" width="400" height="1"></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Conexion con exchanges mediante APIs y WebSockets</td>
+      <td>API documentada para acceso a datos</td>
+    </tr>
+    <tr>
+      <td>Recepcion y procesamiento en tiempo real</td>
+      <td>Integracion de fuentes propias, como feeds RSS</td>
+    </tr>
+    <tr>
+      <td>Generacion de graficos de velas con indicadores</td>
+      <td>Desarrollo de estrategias automatizadas</td>
+    </tr>
+    <tr>
+      <td>Implementacion de indicadores basicos</td>
+      <td>Creacion de indicadores personalizados con JavaScript</td>
+    </tr>
+    <tr>
+      <td>Sistema de alertas configurables</td>
+      <td>Interfaz modular, extensible y personalizable</td>
+    </tr>
+    <tr>
+      <td>Registro de operaciones y observaciones personalizadas</td>
+      <td>Analisis historico de operaciones con calculo de metricas personalizadas, como EV y win rate</td>
+    </tr>
+  </tbody>
+</table>
 
 ## Parte Tres - Stack tecnologico
 
@@ -85,18 +157,55 @@ El sistema sera desplegado localmente en el dispositivo del usuario. Esta decisi
 
 ## Parte Cuatro - Analisis FODA
 
-| Fortalezas | Oportunidades |
-|---|---|
-| Arquitectura modular y extensible | Interes por herramientas financieras personalizadas |
-| No requiere infraestructura externa obligatoria | Posibilidad de crear una comunidad que extienda el sistema |
-| Permite la personalizacion mediante codigo | Interes por soluciones locales sin dependencias |
-| Uso de tecnologias conocidas y muy utilizadas | Mayor disponibilidad de APIs publicas |
+<table width="100%">
+  <thead>
+    <tr>
+      <th width="50%">Fortalezas<img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==" width="400" height="1"></th>
+      <th width="50%">Oportunidades<img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==" width="400" height="1"></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Arquitectura modular y extensible</td>
+      <td>Interes por herramientas financieras personalizadas</td>
+    </tr>
+    <tr>
+      <td>No requiere infraestructura externa obligatoria</td>
+      <td>Posibilidad de crear una comunidad que extienda el sistema</td>
+    </tr>
+    <tr>
+      <td>Permite la personalizacion mediante codigo</td>
+      <td>Interes por soluciones locales sin dependencias</td>
+    </tr>
+    <tr>
+      <td>Uso de tecnologias conocidas y muy utilizadas</td>
+      <td>Mayor disponibilidad de APIs publicas</td>
+    </tr>
+  </tbody>
+</table>
 
-| Debilidades | Amenazas |
-|---|---|
-| Requiere conocimientos tecnicos para aprovechar todas sus capacidades | Plataformas comerciales consolidadas con gran cantidad de usuarios |
-| No cuenta inicialmente con la cantidad de herramientas que poseen las plataformas comerciales | Cambios en las APIs publicas de proveedores de datos |
-| El procesamiento local puede limitarse segun el hardware disponible | Complejidad creciente al intentar incorporar demasiadas funcionalidades |
+<table width="100%">
+  <thead>
+    <tr>
+      <th width="50%">Debilidades<img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==" width="400" height="1"></th>
+      <th width="50%">Amenazas<img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==" width="400" height="1"></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Requiere conocimientos tecnicos para aprovechar todas sus capacidades</td>
+      <td>Plataformas comerciales consolidadas con gran cantidad de usuarios</td>
+    </tr>
+    <tr>
+      <td>No cuenta inicialmente con la cantidad de herramientas que poseen las plataformas comerciales</td>
+      <td>Cambios en las APIs publicas de proveedores de datos</td>
+    </tr>
+    <tr>
+      <td>El procesamiento local puede limitarse segun el hardware disponible</td>
+      <td>Complejidad creciente al intentar incorporar demasiadas funcionalidades</td>
+    </tr>
+  </tbody>
+</table>
 
 ### Viabilidad y riesgos
 
