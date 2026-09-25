@@ -1,7 +1,7 @@
 // demo del sustrato, pinta un panel con marco usando ansi y muestra los eventos que decodifica input
 // el footer prueba el helper editText - q o Ctrl+c cierran el demo y vuelven a la terminal
 
-import { escape, palette, textWidth, truncateTo } from '../src/ansi.mjs';
+import { escape, palette, textWidth, truncateTo, sanitize } from '../src/ansi.mjs';
 import { Dispatcher, editText } from '../src/input.mjs';
 
 // PANTALLA ========================================================================================
@@ -27,7 +27,7 @@ function paint() {
   for (let rowNum = 2; rowNum < h; rowNum++) {
     let content = '';
     if (rowNum === 2) content = palette.accent + 'demo - input + ansi || q para salir' + escape.reset;
-    if (rowNum >= 4 && rowNum <= h - 3 && state.log[rowNum - 4]) content = JSON.stringify(state.log[rowNum - 4]);
+    if (rowNum >= 4 && rowNum <= h - 3 && state.log[rowNum - 4]) content = sanitize(JSON.stringify(state.log[rowNum - 4]));
     if (rowNum === h - 1) content = escape.reset + palette.accent + 'input: ' + escape.reset + truncateTo(state.input.value || 'usa el teclado', Math.max(4, w - 12)) + palette.reader + '█' + escape.reset;
     const safe = truncateTo(content, inner);
     const pad = Math.max(0, inner - textWidth(safe));

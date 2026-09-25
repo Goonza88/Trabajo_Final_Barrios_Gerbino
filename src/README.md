@@ -1,6 +1,6 @@
-# Decisiones de Diseño
+# Substrato de la terminal
 
-En este documento dejaremos planteados los objetivos de cada archivo en el repositorio, y las decisiones que tomamos en cada instancia de trabajo.
+En este documento dejaremos planteados los objetivos de cada archivo en el repositorio (de la capa `/src`), y las decisiones que tomamos en cada instancia de trabajo.
 
 > Para correr la terminal en su estado actual: `node main.mjs` en la raiz del repositorio.
 
@@ -10,14 +10,16 @@ Separamos el codigo que cualquier aplicacion de terminal necesita (pintar, captu
 Trabajo_Final_Barrios_Gerbino/
 ├── README.md                    # propuesta del trabajo
 ├── main.mjs                     # punto de entrada, por ahora carga las demos
-├── docs/                        # documentacion del proyecto
-│   └── diseño.md                # - decisiones de diseño (este documento)
 ├── src/                         # substrato de la terminal
 │   ├── ansi.mjs                 # - escapes, color, medición unicode
-│   └── input.mjs                # - stdin a eventos de teclado/mouse
+│   ├── input.mjs                # - stdin a eventos de teclado/mouse
+│   ├── view.mjs                 # - arbol > lineas pintables > render por diff
+│   ├── widgets.mjs              # - los componentes declarativos que se muestran
+│   └── README.md                # - decisiones de diseño (este documento)
 ├── app/                         # logica de dominio (trading)
 └── test/                        # capa de pruebas
-    └── demo.mjs                 # - test interactivo de ansi + input
+    ├── input-demo.mjs           # - test interactivo de ansi + input
+    └── view-demo.mjs            # - test de widgets + view
 ```
 
 ## ansi.mjs
@@ -47,3 +49,17 @@ Las secuencias se resuelven con tablas (`KEYS` y `FINALS`/`TILDES`) mas los cont
 La tecla Esc es el prefijo, por lo que cuando llega solo, no se sabe si el usuario presiono la tecla o es el inicio de una secuencia. Para manejar ese caso, implementamos un timer de 30ms que emite el evento de la tecla si no llega otro byte.
 
 Para capturar el estado del mouse, usamos [SGR](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html), cuyo reporte es ASCII y un solo formato distingue boton, columna y fila. A partir de eso, derivamos las fases (down/drag/move/up/scroll), que requieren el estado del mouse dentro del `Dispatcher` para distinguir entre las distintas acciones.
+
+## view.mjs
+
+Las terminales pintan linea a linea, y lo mas directo seria dibujar los paneles a mano, pero en ese caso, tocar una parte significaria ajustar todo. Por eso, podemos imitar como funciona el DOM de un navegador, utilizando un arbol de nodos con widgets que deciden que mostrar. Como el arbol se rearma en cada frame a partir del estado, podemos usar la salida anterior como referencia y solo repintar lo que cambio.
+
+La funcion `flatten` recorre el arbol y devuelve las lineas con su contenido, aplicando escapes y calculando el ancho visible. La composicion se resuelve en cascada, cada hijo reparte el ancho disponible en bandas y aplica los estilos. Un nodo desconocido lanza un error, y `flatten` exige un width explicito.
+
+De esta forma, el dominio de la aplicacion nunca toca `view`, solo produce datos que la UI ordena y `view` produce en lineas.
+
+## widgets.mjs
+
+Los widgets son los componentes con los que se arma el arbol que describe view. Cada constructor devuelve un nodo que describe la pieza. Los widgets simples (`text`, `gap`, `table` y `bar`) describen elementos visuales, mientras que los complejos (`rows`, `cols`, `split` y `box`) componen y organizan a sus hijos.
+
+Los nodos son informacion, no tienen imports ni logica, permitiendo que sean faciles de construir.

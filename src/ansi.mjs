@@ -123,6 +123,7 @@ export function truncateTo(str, width) {
   let out = '', used = 0, i = 0;
   while (i < text.length && used < width) {
     if (text[i] === '\x1b') {
+      ANSI.lastIndex = 0;
       const match = ANSI.exec(text.slice(i));
       if (match && match.index === 0) { out += match[0]; i += match[0].length; continue; }
     }

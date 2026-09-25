@@ -55,8 +55,21 @@ function decodeSeq(seq) {
     return name ? [keyEvent(name, modFlags(mod[2]))] : [keyEvent('Esc')];
   }
   // lo que no matcheo antes (Esc+byte => Alt+<tecla>) - CSI desconocida => Esc
-  if (text[1] !== '[') return [keyEvent('Alt+' + text.slice(1)[0], { alt: true })];
+  if (text[1] !== '[') {
+    const char = text.slice(1)[0];
+    return [keyEvent('Alt+' + (controlName(char) || char), { alt: true })];
+  }
   return [keyEvent('Esc')];
+}
+
+// nombre de una tecla de control para combinarla con modificadores - null si no lo es
+function controlName(char) {
+  const codePoint = char.codePointAt(0);
+  if (codePoint === 0x7f || codePoint === 0x08) return 'Backspace';
+  if (codePoint === 0x0d || codePoint === 0x0a) return 'Enter';
+  if (codePoint === 0x09) return 'Tab';
+  if (codePoint < 0x20) return 'Ctrl+' + String.fromCharCode(codePoint + 96);
+  return null;
 }
 
 // convierte texto plano en teclas: Enter, Tab, Backspace y Ctrl+<letra>

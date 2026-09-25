@@ -1,1 +1,1 @@
-import './test/demo.mjs'; // por ahora solamente ejecutamos el demo de inputs/ansi
+import './test/view-demo.mjs'; // ejecutamos el demo de vistas, que incluye al de input
