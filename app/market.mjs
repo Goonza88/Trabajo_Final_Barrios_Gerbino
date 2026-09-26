@@ -1,5 +1,6 @@
 const BASE_URL = 'https://data-api.binance.vision/api/v3/klines';
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT'];
+
 // pedimos una vela para probar OHLCV sin traer historial que todavia no usamos
 const KLINE_INTERVAL = '1m';
 const POLL_INTERVAL_MS = Number(process.env.MARKET_POLL_INTERVAL_MS ?? 5_000);
