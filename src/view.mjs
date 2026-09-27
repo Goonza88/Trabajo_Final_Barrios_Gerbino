@@ -1,4 +1,4 @@
-// view: convierte arboles de widgets en lineas pintables - layout por bandas y render por diff
+// convierte arboles de widgets en lineas pintables - layout por bandas y render por diff
 
 import { escape, palette, selectedBg, toAnsi, textWidth, padRight, truncateTo } from './ansi.mjs';
 
@@ -72,6 +72,7 @@ const WIDGETS = {
   box: paintBox,
   table: paintTable,
   bar: (ctx, node, w) => pushStyled(ctx, barLine(node, w), '', w),
+  input: paintInput,
 };
 
 // emite un nodo en el buffer o lanza si el tipo es desconocido
@@ -273,6 +274,29 @@ function paintSplit(ctx, node, width) {
     const joined = parts.join(' '.repeat(gapW));
     ctx.out.push({ content: truncateTo(joined, width), width: Math.min(rowW + gapW * Math.max(0, parts.length - 1), width) });
   }
+}
+
+// input de una linea - la etiqueta se queda con lo que sobra y el cursor nunca queda afuera
+function paintInput(ctx, node, width) {
+  const labelW = node.label ? textWidth(node.label) + 1 : 0;
+  const total = Math.max(1, Math.min(node.width ?? width, width));
+  const fieldW = Math.max(1, total - labelW);
+  const empty = !node.value;
+  const chars = [...(empty ? node.placeholder : node.value)];
+  const caret = node.caret == null ? chars.length : Math.max(0, Math.min(node.caret, chars.length));
+  const room = Math.max(1, fieldW - 1); // la ultima columna del campo es del cursor
+  const windowAt = (size) => Math.max(0, Math.min(caret - size + 1, chars.length - size));
+  const dots = windowAt(room) > 0 && fieldW >= 3; // sin lugar para el texto no van puntos
+  const visible = dots ? room - 1 : room;
+  const start = windowAt(visible);
+  const slice = chars.slice(start, start + visible);
+  const at = caret - start + (dots ? 1 : 0);
+  let body;
+  if (!node.focused) body = (empty ? palette.muted : '') + slice.join('') + escape.reset;
+  else if (at < slice.length) body = slice.slice(0, at).join('') + toAnsi({ fg: 'accent', bg: 'reader' }) + slice[at] + escape.reset + slice.slice(at + 1).join('');
+  else body = slice.join('') + toAnsi({ bg: 'reader' }) + ' ' + escape.reset;
+  const head = (node.label ? node.label + ' ' : '') + (dots ? '…' : '');
+  pushStyled(ctx, head + body, '', total);
 }
 
 // RENDER ==========================================================================================

@@ -1,6 +1,8 @@
 // demo del sustrato, pinta un panel con marco usando ansi y muestra los eventos que decodifica input
 // el footer prueba el helper editText - q o Ctrl+c cierran el demo y vuelven a la terminal
 
+// no hacemos uso de runtime - este demo hace manualmente lo que runtime simplifica
+
 import { escape, palette, textWidth, truncateTo, sanitize } from '../src/ansi.mjs';
 import { Dispatcher, editText } from '../src/input.mjs';
 

@@ -6,22 +6,6 @@ En este documento dejaremos planteados los objetivos de cada archivo en el repos
 
 Separamos el codigo que cualquier aplicacion de terminal necesita (pintar, capturar teclado y mouse, runtime) de la herramienta de trading, para no contaminar la logica de dominio (conexion con exchanges, manejo de datos, graficos, etc). Separarlos permite la reutilizacion en cualquier herramienta futura.
 
-```
-Trabajo_Final_Barrios_Gerbino/
-├── README.md                    # propuesta del trabajo
-├── main.mjs                     # punto de entrada, por ahora carga las demos
-├── src/                         # substrato de la terminal
-│   ├── ansi.mjs                 # - escapes, color, medición unicode
-│   ├── input.mjs                # - stdin a eventos de teclado/mouse
-│   ├── view.mjs                 # - arbol > lineas pintables > render por diff
-│   ├── widgets.mjs              # - los componentes declarativos que se muestran
-│   └── README.md                # - decisiones de diseño (este documento)
-├── app/                         # logica de dominio (trading)
-└── test/                        # capa de pruebas
-    ├── input-demo.mjs           # - test interactivo de ansi + input
-    └── view-demo.mjs            # - test de widgets + view
-```
-
 ## ansi.mjs
 
 La terminal no es una interfaz grafica, sino un flujo de texto sobre una grilla de celdas de ancho fijo. Todo se comunica mediante **secuencias de escape**, texto invisible que comienza con el codigo de Esc (como `\x1b[H`, que significa "enviar cursor al inicio").
@@ -60,6 +44,27 @@ De esta forma, el dominio de la aplicacion nunca toca `view`, solo produce datos
 
 ## widgets.mjs
 
-Los widgets son los componentes con los que se arma el arbol que describe view. Cada constructor devuelve un nodo que describe la pieza. Los widgets simples (`text`, `gap`, `table` y `bar`) describen elementos visuales, mientras que los complejos (`rows`, `cols`, `split` y `box`) componen y organizan a sus hijos.
+Los widgets son los componentes con los que se arma el arbol que describe view. Cada constructor devuelve un nodo que describe la pieza. Los widgets simples (`text`, `gap`, `table`, `bar` e `input`) describen elementos visuales, mientras que los complejos (`rows`, `cols`, `split` y `box`) componen y organizan a sus hijos.
 
 Los nodos son informacion, no tienen imports ni logica, permitiendo que sean faciles de construir.
+
+## runtime.mjs
+
+Toda aplicacion de terminal necesita seguir los siguientes pasos:
+
+1. Prender el modo raw del teclado al iniciar
+2. Entrar en el modo alternativo (mouse + cursor ocultos)
+3. Conectar los eventos
+4. Volver a pintar solo lo que cambia (usando el diff de `view.mjs`)
+5. Devolver la terminal como estaba al salir
+
+Son tareas que no tienen relacion con el dominio de la app, pero se repiten en toda aplicacion. Olvidar una deja la terminal rota, por lo que centralizarlas en una capa de ciclo de vida es indispensable. El `runtime.mjs` aplica la [arquitectura de Elm](https://guide.elm-lang.org/architecture/), en la que la app se declara como un objeto y el loop se encarga de gestionar todo lo demas.
+
+- `init()`: arma el modelo inicial (puede ser async)
+- `update(model, event)`: devuelve el modelo nuevo (puede ser async)
+- `view(model)`: devuelve el arbol de widgets
+- `subscriptions`: los eventos que la app pide por su cuenta
+
+> Si update no devuelve nada, se asume que modifico el modelo, asi que una app simple puede mutarlo directamente
+
+La principal ventaja de este patron es que el flujo es unidireccional. El estado solo cambia cuando llega un evento, y la pantalla siempre se dibuja a partir del estado, nunca al reves. Eso mantiene la separacion de responsabilidades que ya elegimos: la app no sabe que existe una terminal, y el substrato queda sin logica de dominio.
