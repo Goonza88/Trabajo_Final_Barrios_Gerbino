@@ -1,4 +1,4 @@
-# Trabajo Final: Propuesta
+# Trabajo Final: Propuesta - Entrega Uno
 
 **Autores:** Gonzalo Barrios - Facundo Gerbino
 
@@ -102,7 +102,7 @@ El problema afecta principalmente a dos grupos de usuarios. Las problematicas se
 
 La propuesta consiste en desarrollar un sistema modular de monitoreo y analisis de mercados financieros en tiempo real para operadores independientes, orientado a centralizar el acceso, procesamiento y visualizacion de informacion proveniente de distintas fuentes.
 
-Si bien se implementara una interfaz de terminal inicial, el foco sera preparar el sustrato modular para permitir la mayor extension y modificacion posible. Por eso, el objetivo no es competir con plataformas existentes como TradingView a traves de la cantidad de herramientas incorporadas.
+Si bien se implementara una interfaz de terminal inicial, el foco sera preparar el substrato modular para permitir la mayor extension y modificacion posible. Por eso, el objetivo no es competir con plataformas existentes como TradingView a traves de la cantidad de herramientas incorporadas.
 
 #### Producto minimo viable y vision de evolucion:
 
@@ -151,7 +151,7 @@ La utilizacion de JavaScript permite utilizar un unico lenguaje tanto para la in
 
 La utilizacion de WebSockets permite mantener conexiones persistentes con proveedores de datos financieros, reduciendo la latencia y evitando consultas constantes.
 
-Otro motivo para utilizar JavaScript es la facilidad de extension. Al permitir que los usuarios puedan crear componentes propios mediante el mismo lenguaje utilizado por el sustrato, se reduce la barrera tecnica para personalizar el sistema.
+Otro motivo para utilizar JavaScript es la facilidad de extension. Al permitir que los usuarios puedan crear componentes propios mediante el mismo lenguaje utilizado por el substrato, se reduce la barrera tecnica para personalizar el sistema.
 
 El sistema sera desplegado localmente en el dispositivo del usuario. Esta decision reduce los costos de infraestructura, mantiene la privacidad de los datos generados por el usuario, evita la dependencia de servicios externos y aprovecha los recursos computacionales disponibles localmente.
 

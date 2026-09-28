@@ -1,1 +1,3 @@
 orchestrator.mjs
+data/
+.DS_Store
