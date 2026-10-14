@@ -18,13 +18,14 @@ Comenzamos a trabajar sobre la segunda entrega antes de que se suban los requisi
 ```md
 Trabajo_Final_Barrios_Gerbino/
 ├── backend/                      # la infraestructura y el procesamiento
-│   ├── datos/                    / la persistencia documental en data/
+│   ├── datos/                    / persistencia sobre SQLite - conexion, migraciones y repositorios
 │   ├── metricas/                 / indicadores y metricas de operaciones
 │   ├── red/                      / los conectores con los exchanges
 │   ├── terminal/                 / el sustrato de terminal
 │   └── README.md                 > que entra en esta capa y que no
 ├── database/                     # el esquema de datos
-│   └── database.md              > diagrama, campos, tipos, claves y relaciones
+│   ├── database.md               > diagrama, campos, tipos, claves y relaciones
+│   └── schema.sql                > el DDL de la base de datos
 ├── docs/                         # documentacion de diseño
 │   ├── arquitectura.md           > las capas y el diagrama de arquitectura
 │   ├── modulos.md                > los modulos, segun su prioridad
@@ -40,15 +41,23 @@ Trabajo_Final_Barrios_Gerbino/
 
 ## Tecnologias
 
-- **Node 18 o superior** - es el runtime del proyecto, mantener todo en node permite que extension y substrato se escriban en el mismo lenguaje
+- **Node.js** es el runtime del proyecto y ademas trae el motor de base de datos; mantener todo en node permite que extension y substrato se escriban en el mismo lenguaje
+- **SQLite** a traves del modulo nativo `node:sqlite` - la base de datos del sistema, sin dependencias externas ni servidor
 - **Modulos nativos** ESM con la extension `.mjs`, que permite que los modulos se ejecuten sin depender de la extension del paquete, haciendo innecesario un `package.json`
-- **JSON y JSONL** para almacenar los datos, ya que es lo que `fetch` usa nativamente
+
+### Por que `node:sqlite`
+
+Node trae embebido el motor real de SQLite, no un envoltorio, asi que el motor de base de datos completo viene dentro del runtime de forma nativa. Eso nos permite cumplir el requisito de integrar un motor de base de datos real al proyecto, y al mismo tiempo mantener la propuesta sin dependencias.
+
+Esto es distinto de `better-sqlite3`, un paquete de npm que trae el mismo motor como dependencia instalable: necesita `npm install`, un `package.json` y una compilacion, a cambio de una API mas madura y amplia. Si quisieramos pasar a un paquete asi el costo seria bajo, ya que la implementacion de SQL vive en `backend/datos`, por lo que alcanza con reemplazar el import del modulo por el del paquete y sumar el `package.json` sin tocar el esquema o las consultas.
+
+El requisito para utilizar `node:sqlite` es fijar la version de node a **Node 24 LTS**, ya que la API todavia esta marcada como release candidate y podria cambiar entre versiones mayores de Node. Fijar la version mayor evita que un cambio de API rompa el proyecto.
 
 ## Decisiones y justificacion
 
-**Proyecto local, sin servidor ni dependencias:** Un motor de base de datos agregaria una dependencia que instalar, un proceso mas y un paso extra. Para el volumen de datos que maneja el sistema, es complejidad que no aporta ningun beneficio. Se mantiene la organizacion a traves de la division en distintos archivos.
+**Proyecto local, con base de datos, sin dependencias:** El motor viene embebido en Node (`node:sqlite`), se guarda en un solo archivo y no necesita servidor ni instalacion. Ganamos integridad y consultas reales manteniendo el deploy 100% local, acorde a la propuesta de valor.
 
-**No se guardan credenciales:** La conexion con los exchanges se realiza a traves de endpoints publicos que no requieren API key, y no se almacenan contraseñas ni datos sensibles. No se requiere login, y la informacion del usuario esta en un archivo JSON, portable, facil de respaldar y sin nada que proteger.
+**No se guardan credenciales:** La conexion con los exchanges se realiza a traves de endpoints publicos que no requieren API key, y no se almacenan contraseñas ni datos sensibles. No se requiere login, y la informacion del usuario esta en la base SQLite (`data/app.db`), portable, facil de respaldar y sin nada que proteger.
 
 **La interfaz es de terminal, no web:** Es la decision que mas diferencia al proyecto, y la mas dificil de implementar. La tesis de la propuesta es justamente que un operador trabaja con la app abierta todo el dia, y necesita centralizar la informacion en un sistema liviano y rapido.
 
@@ -57,4 +66,4 @@ Trabajo_Final_Barrios_Gerbino/
 Como la etapa final pide que hosteemos algo, proponemos las siguientes opciones:
 
 - **Informe HTML:** La app genera un archivo .html con toda la informacion y metricas de las operaciones que realizo el usuario. Esta opcion puede extenderse para mostrar en vivo como va determinada operacion, por ejemplo, el PnL actualizandose en vivo, con alertas a remoto basadas en una feed RSS.
-- **Servidor publico:** Un servidor de datos publicos, que se despliega en un servidor Node y lo pueden consumir distintas instalaciones usando `fuente: remoto`. Solo publica datos publicos de mercado, funcionando como un TradingView personalizado.
+- **Dashboard publico:** Un servidor de datos publicos que se despliega en un servidor Node y puede ser consumido por distintas instalaciones con `fuente: remoto`. Publica datos publicos de mercado, permitiendo ver la informacion en tiempo real, y se podria sumar una visualizacion en tiempo real para chequear las operaciones abiertas a distancia.

@@ -15,8 +15,10 @@ Definimos la prioridad de la siguiente forma:
 | componentes | `backend/terminal` | elementos para armar las pantallas: texto, tablas, input, cajas y bordes |
 | render + diff | `backend/terminal` | vuelve a pintar las lineas que cambiaron desde el frame anterior |
 | ciclo de vida y eventos | `backend/terminal` | deja la terminal lista al entrar y como estaba al salir |
-| almacenamiento de mercado | `backend/datos` | guarda y lee las velas en JSONL |
-| almacenamiento del usuario | `backend/datos` | guarda y lee watchlist, alertas, operaciones, notas y configuracion |
+| conexion y migraciones | `backend/datos` | abre la base SQLite, aplica los `PRAGMA` y crea el esquema |
+| catalogo de exchanges y simbolos | `backend/datos` | mantiene `exchange`, `simbolo` y `simbolo_intervalo` |
+| repositorio de mercado | `backend/datos` | guarda y consulta las velas y los tickers en la base |
+| repositorio de usuario | `backend/datos` | guarda y consulta watchlist, alertas, operaciones, notas y configuracion |
 | conexion REST de exchange | `backend/red` | consulta las velas y el ticker que dice la configuracion |
 | normalizador de respuestas | `backend/red` | lleva la respuesta de cada exchange al formato interno |
 | indicadores basicos | `backend/metricas` | media simple, media exponencial, RSI y volumen medio |
@@ -44,4 +46,5 @@ Definimos la prioridad de la siguiente forma:
 | noticias por RSS | `backend/red` | una fuente propia de informacion |
 | indicadores personalizados en js | `backend/metricas` | API documentada para sumar indicadores propios |
 | backtesting de estrategias | `backend/metricas` | ejecutar una estrategia sobre el historial |
+| respaldo de la base | `backend/datos` | copia de seguridad del archivo `data/app.db` |
 | ayuda y atajos | `frontend/vistas` | pantalla de ayuda y la lista de teclas |
