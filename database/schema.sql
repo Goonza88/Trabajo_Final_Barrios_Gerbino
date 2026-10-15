@@ -1,5 +1,5 @@
 -- esquema de la base SQLite del sistema
--- se crea una sola vez con las migraciones de backend/datos
+-- se crea con las migraciones de backend/datos
 -- los datos se guardan en un unico archivo: data/app.db
 
 PRAGMA foreign_keys = ON;
@@ -97,8 +97,8 @@ CREATE TABLE alerta (
   tipo           TEXT    NOT NULL CHECK (tipo IN ('precio','variacion','volumen','indicador')),
   campo          TEXT    NOT NULL,
   operador       TEXT    NOT NULL CHECK (operador IN ('>','>=','<','<=','==','cruza_arriba','cruza_abajo')),
-  valor          REAL    NOT NULL,
-  timeframe      TEXT    NOT NULL,
+  valor          TEXT    NOT NULL,
+  timeframe      TEXT    NOT NULL CHECK (timeframe IN ('1m','5m','1h','4h','1d')),
   activa         INTEGER NOT NULL DEFAULT 1 CHECK (activa IN (0,1)),
   disparada      INTEGER NOT NULL DEFAULT 0 CHECK (disparada IN (0,1)),
   ultimo_disparo INTEGER,
@@ -106,6 +106,19 @@ CREATE TABLE alerta (
   note           TEXT,
   created_at     INTEGER NOT NULL,
   updated_at     INTEGER NOT NULL,
+  -- el campo tiene que corresponder al tipo de la alerta
+  -- en indicador el nombre es libre y lo valida la app, pero no puede quedar vacio
+  CHECK (
+    (tipo = 'precio'    AND campo = 'price')     OR
+    (tipo = 'variacion' AND campo = 'change24h') OR
+    (tipo = 'volumen'   AND campo = 'volume24h') OR
+    (tipo = 'indicador' AND campo <> '')
+  ),
+  -- el umbral es un decimal simple: digitos con un punto y hasta 8 decimales
+  CHECK (
+    valor GLOB '[0-9]*' AND valor NOT GLOB '*[^0-9.]*' AND valor NOT GLOB '*.*.*'
+    AND (instr(valor, '.') = 0 OR length(valor) - instr(valor, '.') <= 8)
+  ),
   FOREIGN KEY (exchange_id, symbol)
     REFERENCES simbolo(exchange_id, symbol) ON DELETE CASCADE
 );
@@ -125,6 +138,25 @@ CREATE TABLE operacion (
   estado         TEXT    NOT NULL CHECK (estado IN ('abierta','cerrada','cancelada')),
   notas          TEXT,
   CHECK (estado <> 'cerrada' OR (precio_salida IS NOT NULL AND cerrada_en IS NOT NULL)),
+  -- los decimales que carga el usuario van con texto decimal simple:
+  -- digitos con un punto y hasta 8 decimales, sin notacion cientifica
+  CHECK (
+    (
+      cantidad GLOB '[0-9]*' AND cantidad NOT GLOB '*[^0-9.]*' AND cantidad NOT GLOB '*.*.*'
+      AND (instr(cantidad, '.') = 0 OR length(cantidad) - instr(cantidad, '.') <= 8)
+    ) AND (
+      precio_entrada GLOB '[0-9]*' AND precio_entrada NOT GLOB '*[^0-9.]*' AND precio_entrada NOT GLOB '*.*.*'
+      AND (instr(precio_entrada, '.') = 0 OR length(precio_entrada) - instr(precio_entrada, '.') <= 8)
+    ) AND (
+      precio_salida IS NULL OR (
+        precio_salida GLOB '[0-9]*' AND precio_salida NOT GLOB '*[^0-9.]*' AND precio_salida NOT GLOB '*.*.*'
+        AND (instr(precio_salida, '.') = 0 OR length(precio_salida) - instr(precio_salida, '.') <= 8)
+      )
+    ) AND (
+      fees GLOB '[0-9]*' AND fees NOT GLOB '*[^0-9.]*' AND fees NOT GLOB '*.*.*'
+      AND (instr(fees, '.') = 0 OR length(fees) - instr(fees, '.') <= 8)
+    )
+  ),
   FOREIGN KEY (exchange_id, symbol)
     REFERENCES simbolo(exchange_id, symbol) ON DELETE RESTRICT
 );
@@ -156,7 +188,7 @@ CREATE TABLE nota_tag (
 
 CREATE TABLE config (
   id                    TEXT PRIMARY KEY CHECK (id = 'local'),
-  intervalo_por_defecto TEXT NOT NULL,
+  intervalo_por_defecto TEXT NOT NULL CHECK (intervalo_por_defecto IN ('1m','5m','1h','4h','1d')),
   exchange_id           TEXT,
   simbolo_por_defecto   TEXT,
   fuente                TEXT NOT NULL CHECK (fuente IN ('local','remoto')),
@@ -164,6 +196,7 @@ CREATE TABLE config (
   sondeo_ms             INTEGER NOT NULL CHECK (sondeo_ms > 0),
   actualizado_en        INTEGER NOT NULL,
   CHECK ((exchange_id IS NULL) = (simbolo_por_defecto IS NULL)),
+  CHECK ((fuente = 'remoto') = (fuente_url IS NOT NULL)),
   FOREIGN KEY (exchange_id, simbolo_por_defecto)
     REFERENCES simbolo(exchange_id, symbol) ON DELETE SET NULL
 );

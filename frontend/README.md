@@ -2,7 +2,7 @@
 
 En esta carpeta se ubicara todo lo relacionado a la interfaz, lo que el usuario ve y lo que hace. Recibe los eventos del substrato de terminal, los pasa al dominio y muestra el resultado.
 
-Para mantener la regla de *cada capa habla con la inferior, no la superior*, el codigo de esta carpeta solo puede pedirle datos al dominio y dibujar al substrato, pero no accede a la base de datos, no gestiona la conexion con los exchanges, ni escribe secuencias ANSI.
+Para mantener la regla de *cada capa solo pide a la inferior, no a la superior*, el codigo de esta carpeta solo puede pedirle datos al dominio y dibujar al substrato, pero no accede a la base de datos, no gestiona la conexion con los exchanges, ni escribe secuencias ANSI.
 
 ## Estructura
 

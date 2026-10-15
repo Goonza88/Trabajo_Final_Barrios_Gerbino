@@ -22,10 +22,11 @@ Definimos la prioridad de la siguiente forma:
 | conexion REST de exchange | `backend/red` | consulta las velas y el ticker que dice la configuracion |
 | normalizador de respuestas | `backend/red` | lleva la respuesta de cada exchange al formato interno |
 | indicadores basicos | `backend/metricas` | media simple, media exponencial, RSI y volumen medio |
-| metricas de operaciones | `backend/metricas` | PnL, win rate, profit factor y valor esperado |
+| aritmetica decimal | `backend/metricas` | valida y parsea decimales y hace cuentas sin perder precision |
 | layout y navegacion | `frontend/vistas` | reparte pantalla en paneles y mueve el foco |
 | grafico de velas | `frontend/graficos` | dibuja precio, las velas y los indicadores |
 | watchlist con precio en vivo | `frontend/features` | lista de simbolos con el ultimo precio y su variacion |
+| registro de operaciones | `frontend/features` | alta, salida y listado del diario de operaciones |
 
 ## P1 - Extension
 
@@ -34,7 +35,7 @@ Definimos la prioridad de la siguiente forma:
 | WebSocket | `backend/red` | recibe velas actualizadas sin volver a consultar |
 | motor de alertas | `backend/metricas` | evalua condiciones configuradas y avisa cuando se cumplen |
 | CRUD de alertas | `frontend/features` | la pantalla para crear, modificar y activar alertas |
-| CRUD de operaciones | `frontend/features` | el diario, con el formulario de entrada y salida |
+| metricas de operaciones | `backend/metricas` | PnL, win rate, profit factor y valor esperado |
 | vista de metricas propias | `frontend/vistas` | panel con metricas, filtrable |
 | notas del usuario | `frontend/features` | observaciones libres, buscables y etiquetables |
 

@@ -4,10 +4,10 @@ Este documento describe la arquitectura del sistema, organizada en capas. El mod
 
 ## Capas
 
-Elegimos una arquitectura por capas: cada capa habla con la de abajo, nunca con la de arriba. Mantener esa regla central es lo que habilitara la extensibilidad, ya que permitira que un indicador se sume al dominio sin tocar la interfaz, un widget se sume a la interfaz sin tocar el dominio, o un exchange nuevo se sume a los conectores.
+Elegimos una arquitectura por capas: cada capa solo pide a la inferior, no a la superior; lo que sube en el grafo es la respuesta, el estado y los eventos. Mantener esa regla central es lo que habilitara la extensibilidad, ya que permitira que un indicador se sume al dominio sin tocar la interfaz, un widget se sume a la interfaz sin tocar el dominio, o un exchange nuevo se sume a los conectores.
 
 - La **interfaz** recibe lo que el usuario hace y muestra el estado, sin gestionar input ni render
-- El **dominio** calcula indicadores y metricas de operaciones, sin saber que existe una terminal
+- El **dominio** valida lo que carga el usuario, calcula indicadores y metricas de operaciones, coordina la ingesta y la persistencia a traves de los repositorios, sin saber que existe una terminal
 - La **persistencia** guarda y consulta en la base SQLite, sin hacer calculos de indicadores ni metricas
 - Los **conectores** hablan con los exchanges, sin saber nada del resto de la app
 - El **sustrato de terminal** maneja la pantalla y el teclado, sin saber nada de trading
@@ -23,14 +23,14 @@ graph TD
     BD["SQLite<br>data/app.db"]
 
     UI -->|"pide datos"| DOM
-    DOM -->|"lee y escribe"| DATOS
-    DATOS -->|"pide velas y tickers"| RED
+    DOM -.->|"entrega estado y eventos"| UI
+    DOM -->|"solicita velas y tickers"| RED
     RED -->|"REST y WebSocket"| EXCH
-    RED -->|"normaliza y entrega"| DATOS
+    RED -.->|"normaliza y entrega"| DOM
+    DOM -->|"lee y escribe por repositorios"| DATOS
     DATOS -->|"guarda y consulta"| BD
     UI -->|"pinta con"| TERM
-    RED -->|"emite eventos"| TERM
-    TERM -->|"devuelve eventos"| UI
+    TERM -.->|"devuelve eventos"| UI
 ```
 
-La persistencia es la unica capa que escribe SQL, y el resto del sistema accede a los datos a traves de sus repositorios. El detalle esta en [`/database/database.md`](../database/database.md).
+La persistencia es la unica capa que escribe SQL, y el resto del sistema accede a los datos a traves de sus repositorios. La interfaz nunca lee la base: muestra el estado que le entrega el dominio, que tiene los datos que llegan del exchange y la historia que carga de la base. El detalle esta en [`/database/database.md`](../database/database.md).
