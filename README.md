@@ -8,7 +8,7 @@ La propuesta original planteaba el despliegue 100% local, sin cuentas, dependenc
 
 ## Segunda entrega: diseño y modulos
 
-Comenzamos a trabajar sobre la segunda entrega antes de que se suban los requisitos, por lo que sin saberlo nos adelantamos y pasamos a la implementacion. Ese codigo quedo preservado en la branch `wip/substrato-terminal` y no forma parte de esta entrega.
+Comenzamos a trabajar sobre la segunda entrega antes de que se suban los requisitos, por lo que sin saberlo nos adelantamos y pasamos a la implementacion. Ese codigo quedo preservado en la branch `wip/substrato-terminal` hasta que fue reintegrado dentro de la estructura documentada a partir de la tercera entrega.
 
 - **estructura del repositorio** - este archivo
 - **arquitectura del proyecto** - [`docs/arquitectura.md`](docs/arquitectura.md)
@@ -26,16 +26,21 @@ Trabajo_Final_Barrios_Gerbino/
 ├── database/                     # el esquema de datos
 │   ├── database.md               > diagrama, campos, tipos, claves y relaciones
 │   └── schema.sql                > el DDL de la base de datos
+├── demo/                         # demos manuales del substrato
+│   └── menu.mjs                  > elige y ejecuta cada demo
 ├── docs/                         # documentacion de diseño
 │   ├── arquitectura.md           > las capas y el diagrama de arquitectura
+│   ├── exchanges.md              > investigacion de los exchanges candidatos
 │   ├── modulos.md                > los modulos, segun su prioridad
 │   └── propuesta.md              > la propuesta del trabajo, primera entrega
 ├── frontend/                     # la capa de interfaz
 │   ├── estado/                   / el modelo de la app en memoria
 │   ├── features/                 / pantallas de alta de alertas, operaciones y notas
 │   ├── graficos/                 / el grafico de velas y el informe HTML
+│   ├── paleta.mjs                > los colores del proyecto por rol
 │   ├── vistas/                   / paneles, navegacion, tablas y ayuda
 │   └── README.md                 > que entra en esta capa y que no
+├── main.mjs                      > entrypoint de la app
 └── README.md                     > este archivo
 ```
 
