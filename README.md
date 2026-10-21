@@ -17,6 +17,8 @@ Comenzamos a trabajar sobre la segunda entrega antes de que se suban los requisi
 
 ```md
 Trabajo_Final_Barrios_Gerbino/
+├── .github/                      # integracion continua
+│   └── workflows/ci.yml          > chequea sintaxis y corre los tests en cada push
 ├── backend/                      # la infraestructura y el procesamiento
 │   ├── datos/                    / persistencia sobre SQLite - conexion, migraciones y repositorios
 │   ├── metricas/                 / indicadores y metricas de operaciones
@@ -40,6 +42,10 @@ Trabajo_Final_Barrios_Gerbino/
 │   ├── paleta.mjs                > los colores del proyecto por rol
 │   ├── vistas/                   / paneles, navegacion, tablas y ayuda
 │   └── README.md                 > que entra en esta capa y que no
+├── test/                         # los tests del substrato
+│   └── *.test.mjs                > view, input, runtime y paleta - se corren con node --test
+├── .nvmrc                        > ignoramos la base de datos generada para no subirla
+├── .nvmrc                        > node 24 LTS - la version que usan nvm y la CI
 ├── main.mjs                      > entrypoint de la app
 └── README.md                     > este archivo
 ```
