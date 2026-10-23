@@ -10,7 +10,7 @@ La base es un unico archivo (`data/app.db`, que no se versiona y esta en el `.gi
 
 1. Se abre la conexion y se aplican `PRAGMA`: `foreign_keys = ON`, `journal_mode = WAL`, `busy_timeout` y `synchronous = NORMAL` para que se respeten las claves foraneas, leer mientras se escribe, esperar si el archivo esta ocupado, y equilibrar velocidad y seguridad con WAL.
 2. Se ejecutan las migraciones de `backend/datos/migraciones/`, que aplican o actualizan el DDL de [`schema.sql`](schema.sql) y cargan el catalogo inicial (Binance con `BTCUSDT` y `ETHUSDT`).
-3. El resto de la app accede a datos solo a traves de los repositorios de `backend/datos` (`catalogo`, `mercado`, `watchlist`, `alertas`, `operaciones`, `notas` y `config`), y nunca escribe SQL por su cuenta. La interfaz no consulta la base de datos, muestra el estado que le entrega el dominio.
+3. El resto de la app accede a datos solo a traves de los repositorios de `backend/datos`, y nunca escribe SQL por su cuenta. La interfaz no consulta la base de datos, muestra el estado que le entrega el dominio. El contrato esta en [`contrato.md`](contrato.md).
 4. Para traer informacion del mercado, usamos `INSERT ... ON CONFLICT DO UPDATE` dentro de una transaccion, para que volver a consultar el mismo periodo no duplique filas.
 
 ## Decisiones

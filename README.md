@@ -6,7 +6,7 @@ El objetivo no es competir con una plataforma comercial, sino aportar un lugar d
 
 La propuesta original planteaba el despliegue 100% local, sin cuentas, dependencias o infraestructura. Esa decision se mantiene ya que es la que ordena todo lo demas.
 
-## Segunda entrega: diseño y modulos
+## 2da y 3ra entrega
 
 Comenzamos a trabajar sobre la segunda entrega antes de que se suban los requisitos, por lo que sin saberlo nos adelantamos y pasamos a la implementacion. Ese codigo quedo preservado en la branch `wip/substrato-terminal` hasta que fue reintegrado dentro de la estructura documentada a partir de la tercera entrega.
 
@@ -14,6 +14,7 @@ Comenzamos a trabajar sobre la segunda entrega antes de que se suban los requisi
 - **arquitectura del proyecto** - [`docs/arquitectura.md`](docs/arquitectura.md)
 - **listado de modulos** - [`docs/modulos.md`](docs/modulos.md)
 - **esquema de la base de datos** - [`database/database.md`](database/database.md)
+- **contrato de datos** - [`database/contrato.md`](database/contrato.md)
 
 ```md
 Trabajo_Final_Barrios_Gerbino/
@@ -21,14 +22,17 @@ Trabajo_Final_Barrios_Gerbino/
 │   └── workflows/ci.yml          > chequea sintaxis y corre los tests en cada push
 ├── backend/                      # la infraestructura y el procesamiento
 │   ├── datos/                    / persistencia sobre SQLite - conexion, migraciones y repositorios
+│   │   └── contrato/             / vocabularios, catalogo inicial y validaciones que importa sqlite
 │   ├── metricas/                 / indicadores y metricas de operaciones
 │   ├── red/                      / los conectores con los exchanges
 │   ├── terminal/                 / el sustrato de terminal
 │   └── README.md                 > que entra en esta capa y que no
-├── database/                     # el esquema de datos
+├── database/                     # el esquema y el contrato de datos
+│   ├── contrato.md               > la especificacion de la capa de datos (metodos, reglas y errores)
 │   ├── database.md               > diagrama, campos, tipos, claves y relaciones
 │   └── schema.sql                > el DDL de la base de datos
 ├── demo/                         # demos manuales del substrato
+│   ├── *-demo.mjs                > demos especificas de partes del substrato
 │   └── menu.mjs                  > elige y ejecuta cada demo
 ├── docs/                         # documentacion de diseño
 │   ├── arquitectura.md           > las capas y el diagrama de arquitectura
@@ -42,9 +46,9 @@ Trabajo_Final_Barrios_Gerbino/
 │   ├── paleta.mjs                > los colores del proyecto por rol
 │   ├── vistas/                   / paneles, navegacion, tablas y ayuda
 │   └── README.md                 > que entra en esta capa y que no
-├── test/                         # los tests del substrato
-│   └── *.test.mjs                > view, input, runtime y paleta - se corren con node --test
-├── .nvmrc                        > ignoramos la base de datos generada para no subirla
+├── test/                         # la suite de tests
+│   └── *.test.mjs                > view, input, runtime y paleta - se ejecutan con node --test
+├── .gitignore                    > ignoramos la base de datos generada para no subirla
 ├── .nvmrc                        > node 24 LTS - la version que usan nvm y la CI
 ├── main.mjs                      > entrypoint de la app
 └── README.md                     > este archivo
