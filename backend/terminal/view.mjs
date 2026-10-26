@@ -224,8 +224,11 @@ function paintTable(ctx, node, width) {
   const rowsArr = node.rows || [];
   const colCount = Math.max(node.headers?.length || 0, rowsArr[0]?.length || 0);
   if (!colCount) return;
-  const colWidths = []; // ancho = maximo contenido que tiene
-  if (node.headers) for (let col = 0; col < colCount; col++) colWidths[col] = textWidth(String(node.headers[col] ?? ''));
+  const colWidths = [];
+  if (node.widths) {
+    for (let col = 0; col < colCount; col++) colWidths[col] = Math.max(0, node.widths[col] || 0);
+  }
+  if (node.headers) for (let col = 0; col < colCount; col++) colWidths[col] = Math.max(colWidths[col] || 0, textWidth(String(node.headers[col] ?? '')));
   for (const row of rowsArr) {
     for (let col = 0; col < colCount; col++) {
       const cell = row && col < row.length ? row[col] : null;
@@ -233,10 +236,33 @@ function paintTable(ctx, node, width) {
     }
   }
   const gapW = 1;
-  const header = node.headers ? node.headers.map((head, col) => padRight(String(head), colWidths[col])).join(' '.repeat(gapW)) : '';
+  if (node.fill && !node.widths) {
+    const used = colWidths.reduce((a, b) => a + b, 0) + gapW * Math.max(0, colCount - 1);
+    let extra = width - used;
+    if (extra > 0) {
+      const base = Math.floor(extra / colCount);
+      let rem = extra % colCount;
+      for (let i = 0; i < colCount; i++) {
+        colWidths[i] += base + (rem > 0 ? 1 : 0);
+        if (rem > 0) rem--;
+      }
+    }
+  }
+  function padCell(str, w) {
+    const s = String(str ?? '');
+    const sw = textWidth(s);
+    if (sw >= w) return s;
+    if (node.align === 'center' || node.align === 'mid') {
+      const left = Math.floor((w - sw) / 2);
+      const right = w - sw - left;
+      return ' '.repeat(left) + s + ' '.repeat(right);
+    }
+    return s + ' '.repeat(w - sw);
+  }
+  const header = node.headers ? node.headers.map((head, col) => padCell(head, colWidths[col])).join(' '.repeat(gapW)) : '';
   if (header) pushStyled(ctx, header, palette.muted, width);
   for (let row = 0; row < rowsArr.length; row++) {
-    const cells = rowsArr[row].map((cell, col) => padRight(String(cell ?? ''), colWidths[col])).join(' '.repeat(gapW));
+    const cells = rowsArr[row].map((cell, col) => padCell(cell, colWidths[col])).join(' '.repeat(gapW));
     const isSelected = node.cursor != null && row === node.cursor;
     const line = isSelected ? applyBg(cells, toAnsi({ bg: 'selected' })) : cells;
     ctx.out.push({ content: truncateTo(line, width), width: Math.min(textWidth(cells), width) });

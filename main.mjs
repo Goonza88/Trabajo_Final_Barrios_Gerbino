@@ -2,15 +2,16 @@
 // con "d" se ejecuta el menu de demos - la primera vista real la arma frontend/vistas
 
 import { spawn } from 'node:child_process';
-import { run, stop, size, quit } from './backend/terminal/runtime.mjs';
+import { run, stop, size, quit, Sub } from './backend/terminal/runtime.mjs';
 import { setPalette } from './backend/terminal/ansi.mjs';
 import { PALETA } from './frontend/paleta.mjs';
 import { box, rows, text, gap } from './backend/terminal/widgets.mjs';
+import { crearEstado } from './frontend/estado/mercado.mjs';
+import { vistaMercado } from './frontend/vistas/mercado.mjs';
 
-// la identidad esta en frontend/paleta.mjs - los defaults son neutros
 setPalette(PALETA);
 
-const app = {
+const home = {
   init: () => ({ inicio: new Date() }),
 
   view: (model) => {
@@ -24,29 +25,59 @@ const app = {
       text(`terminal ${cols}x${filas}`, { fg: 'muted' }),
       text(`iniciado ${model.inicio.toLocaleTimeString('es-AR')}`, { fg: 'muted' }),
       gap(),
+      text('m mercado', { fg: 'sec' }),
       text('d demos', { fg: 'sec' }),
       text('q salir', { fg: 'sec' }),
     ]), { border: 'round', height: filas, pad: [0, 1] });
   },
 
-  // cada evento pasa por aca en orden - update puede ser async y la queue espera
   update: async (model, event) => {
     if (event.type !== 'key') return model;
     if (event.key === 'q') quit();
     if (event.key === 'd') {
-      stop();                          // soltamos la terminal para que el menu la use
-      const proteger = () => {};       // mientras corre el menu el Ctrl+C es asunto del menu, no nuestro
+      stop();
+      const proteger = () => {};
       process.on('SIGINT', proteger);
       await correrMenu();
       process.off('SIGINT', proteger);
-      run(app);                        // vuelve la pantalla inicial, con modelo nuevo
-      return;                          // el update viejo no pisa el modelo que acaba de arrancar
+      run(home);
+      return;
+    }
+    if (event.key === 'm') {
+      stop();
+      run(mercado);
+      return;
     }
     return model;
   },
 };
 
-// corre el menu de demos como un proceso aparte
+function mercadoApp() {
+  const { estado, cargar } = crearEstado({ symbol: 'BTCUSDT', interval: '1m', limite: 100 });
+  return {
+    init: async () => {
+      await cargar();
+      return estado;
+    },
+    subscriptions: [Sub.interval(5000, 'poll')],
+    update: async (model, event) => {
+      if (event.type === 'key' && (event.key === 'q' || event.key === 'h')) {
+        stop();
+        run(home);
+        return model;
+      }
+      if (event.type === 'sub:tick' && event.tag === 'poll') {
+        await cargar();
+        return estado;
+      }
+      return model;
+    },
+    view: () => vistaMercado(estado)
+  };
+}
+
+const mercado = mercadoApp();
+
 function correrMenu() {
   return new Promise(resolve => {
     const hijo = spawn(process.execPath, ['./demo/menu.mjs'], { stdio: 'inherit' });
@@ -55,4 +86,4 @@ function correrMenu() {
   });
 }
 
-run(app);
+run(home);
