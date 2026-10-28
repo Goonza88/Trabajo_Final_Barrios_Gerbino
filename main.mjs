@@ -74,6 +74,26 @@ function mercadoApp() {
           modoTabla = !modoTabla;
           return estado;
         }
+        if (event.key === 'p') {
+          if (!estado.precision) {
+            estado.zoomYBeforePrecision = estado.zoomY;
+            estado.precision = true;
+            const list = estado.zoomYSnap;
+            let best = 0, bestD = Infinity;
+            for (let i = 0; i < list.length; i++) {
+              const d = Math.abs(list[i] - estado.zoomY);
+              if (d < bestD) { bestD = d; best = i; }
+            }
+            estado.zoomY = list[best];
+          } else {
+            if (estado.zoomYBeforePrecision != null) {
+              estado.zoomY = estado.zoomYBeforePrecision;
+              estado.zoomYBeforePrecision = null;
+            }
+            estado.precision = false;
+          }
+          return estado;
+        }
         if (event.key === 'a') { await setIntervalo('1m'); return estado; }
         if (event.key === 's') { await setIntervalo('5m'); return estado; }
         if (event.key === 'd') { await setIntervalo('1h'); return estado; }

@@ -90,7 +90,6 @@ function paintCandlechart(ctx, node, width) {
   const w = Math.max(1, totalW - axisW);
   const zoomY = node.zoomY || 1.0;
   const offsetY = node.offsetY || 0;
-  const useHalf = node.half !== false;
   const toLog = (v) => Math.log10(Math.max(Number(v), 1e-18));
   let lmin = Infinity, lmax = -Infinity;
   for (const c of candles) {
@@ -182,116 +181,51 @@ function paintCandlechart(ctx, node, width) {
   const xgridSet = new Set(xg);
   const grid = Array.from({ length: h }, () => Array(w).fill(null));
   const count = slice.length;
-  if (useHalf) {
-    const sub = 2;
-    const h2 = h * sub;
-    const covWick = Array.from({ length: h2 }, () => Array(w).fill(0));
-    const covBody = Array.from({ length: h2 }, () => Array(w).fill(0));
-    function fillInterval(arr, col, p1, p2) {
-      if (col < 0 || col >= w) return;
-      const minP = Math.min(p1, p2);
-      const maxP = Math.max(p1, p2);
-      if (maxP < -0.5 || minP > h - 0.5) return;
-      for (let sr = 0; sr < h2; sr++) {
-        const s0 = sr / sub;
-        const s1s = (sr + 1) / sub;
-        if (s1s <= minP - 1e-6 || s0 >= maxP + 1e-6) continue;
-        const im = Math.max(minP, s0);
-        const ix = Math.min(maxP, s1s);
-        if (ix <= im) continue;
-        const scov = (ix - im) / (s1s - s0);
-        if (scov > arr[sr][col]) arr[sr][col] = Math.min(1, scov);
+  for (let i = 0; i < count; i++) {
+    const c = slice[i];
+    const o = Number(c.open), cl = Number(c.close), lo = Number(c.low), hi = Number(c.high);
+    const pH = py(hi), pL = py(lo), pO = py(o), pC = py(cl);
+    const up = cl >= o;
+    const col = colForIndex(i);
+    if (hi > lo) {
+      const minP = Math.min(pH, pL);
+      const maxP = Math.max(pH, pL);
+      let r1w = Math.floor(minP);
+      let r2w = Math.ceil(maxP);
+      if (r2w <= r1w) {
+        r1w = Math.floor(minP);
+        r2w = r1w + 1;
       }
-    }
-    function fillBody(arr, col, p1, p2) {
-      if (col < 0 || col >= w) return;
-      const minP = Math.min(p1, p2);
-      const maxP = Math.max(p1, p2);
-      if (maxP < -0.5 || minP > h - 0.5) return;
-      for (let sr = 0; sr < h2; sr++) {
-        const s0 = sr / sub;
-        const s1s = (sr + 1) / sub;
-        if (s1s <= minP - 1e-6 || s0 >= maxP + 1e-6) continue;
-        const im = Math.max(minP, s0);
-        const ix = Math.min(maxP, s1s);
-        if (ix <= im) continue;
-        const scov = (ix - im) / (s1s - s0);
-        if (scov > arr[sr][col]) arr[sr][col] = Math.min(1, scov);
-      }
-    }
-    for (let i = 0; i < count; i++) {
-      const c = slice[i];
-      const o = Number(c.open), cl = Number(c.close), lo = Number(c.low), hi = Number(c.high);
-      const pH = py(hi), pL = py(lo), pO = py(o), pC = py(cl);
-      const up = cl >= o;
-      const col = colForIndex(i);
-      if (hi > lo) fillInterval(covWick, col, pH, pL);
-      else {
-        const minP = Math.min(pH,pL);
-        fillInterval(covWick, col, Math.max(0, minP - 1e-3), Math.min(h-1, minP + 1e-3));
-      }
-      if (o !== cl) fillBody(covBody, col, pO, pC);
-      else {
-        const minP = Math.min(pO,pC);
-        fillBody(covBody, col, Math.max(0, minP - 1e-3), Math.min(h-1, minP + 1e-3));
-      }
-      node._candleUp = node._candleUp || [];
-      node._candleUp[i] = up;
-      node._candleCol = node._candleCol || [];
-      node._candleCol[i] = col;
-    }
-    node._covWick = covWick;
-    node._covBody = covBody;
-    node._h2 = h2;
-    node._w = w;
-    node._h = h;
-  } else {
-    for (let i = 0; i < count; i++) {
-      const c = slice[i];
-      const o = Number(c.open), cl = Number(c.close), lo = Number(c.low), hi = Number(c.high);
-      const pH = py(hi), pL = py(lo), pO = py(o), pC = py(cl);
-      const up = cl >= o;
-      const col = colForIndex(i);
-      if (hi > lo) {
-        const minP = Math.min(pH, pL);
-        const maxP = Math.max(pH, pL);
-        let r1w = Math.floor(minP);
-        let r2w = Math.ceil(maxP);
-        if (r2w <= r1w) {
-          r1w = Math.floor(minP);
-          r2w = r1w + 1;
-        }
-        r1w = Math.max(0, Math.min(h - 1, r1w));
-        r2w = Math.max(0, Math.min(h - 1, r2w));
-        if (r2w < r1w) { const tmp = r1w; r1w = r2w; r2w = tmp; }
-        for (let r = r1w; r <= r2w; r++) {
-          if (grid[r] && col >= 0 && col < w) grid[r][col] = { ch: '|', color: up ? palette.success : palette.danger };
-        }
-      } else {
-        const yM = Math.round((pH + pL) / 2);
-        const r = Math.max(0, Math.min(h - 1, yM));
+      r1w = Math.max(0, Math.min(h - 1, r1w));
+      r2w = Math.max(0, Math.min(h - 1, r2w));
+      if (r2w < r1w) { const tmp = r1w; r1w = r2w; r2w = tmp; }
+      for (let r = r1w; r <= r2w; r++) {
         if (grid[r] && col >= 0 && col < w) grid[r][col] = { ch: '|', color: up ? palette.success : palette.danger };
       }
-      if (o !== cl) {
-        const minPB = Math.min(pO, pC);
-        const maxPB = Math.max(pO, pC);
-        let r1b = Math.floor(minPB);
-        let r2b = Math.ceil(maxPB);
-        if (r2b <= r1b) {
-          r1b = Math.floor(minPB);
-          r2b = r1b + 1;
-        }
-        r1b = Math.max(0, Math.min(h - 1, r1b));
-        r2b = Math.max(0, Math.min(h - 1, r2b));
-        if (r2b < r1b) { const tmp = r1b; r1b = r2b; r2b = tmp; }
-        for (let r = r1b; r <= r2b; r++) {
-          if (grid[r] && col >= 0 && col < w) grid[r][col] = { ch: '█', color: up ? palette.success : palette.danger };
-        }
-      } else {
-        const yM = Math.round((pO + pC) / 2);
-        const r = Math.max(0, Math.min(h - 1, yM));
+    } else {
+      const yM = Math.round((pH + pL) / 2);
+      const r = Math.max(0, Math.min(h - 1, yM));
+      if (grid[r] && col >= 0 && col < w) grid[r][col] = { ch: '|', color: up ? palette.success : palette.danger };
+    }
+    if (o !== cl) {
+      const minPB = Math.min(pO, pC);
+      const maxPB = Math.max(pO, pC);
+      let r1b = Math.floor(minPB);
+      let r2b = Math.ceil(maxPB);
+      if (r2b <= r1b) {
+        r1b = Math.floor(minPB);
+        r2b = r1b + 1;
+      }
+      r1b = Math.max(0, Math.min(h - 1, r1b));
+      r2b = Math.max(0, Math.min(h - 1, r2b));
+      if (r2b < r1b) { const tmp = r1b; r1b = r2b; r2b = tmp; }
+      for (let r = r1b; r <= r2b; r++) {
         if (grid[r] && col >= 0 && col < w) grid[r][col] = { ch: '█', color: up ? palette.success : palette.danger };
       }
+    } else {
+      const yM = Math.round((pO + pC) / 2);
+      const r = Math.max(0, Math.min(h - 1, yM));
+      if (grid[r] && col >= 0 && col < w) grid[r][col] = { ch: '█', color: up ? palette.success : palette.danger };
     }
   }
   function fmt(v) {
@@ -328,68 +262,26 @@ function paintCandlechart(ctx, node, width) {
     if (!ylabels.has(rr)) ylabels.set(rr, fmt(price));
   }
 
-  if (useHalf && node._covWick && node._covBody) {
-    const covWick = node._covWick;
-    const covBody = node._covBody;
-    const cc = node._candleCol || [];
-    const cu = node._candleUp || [];
-    for (let r = 0; r < h; r++) {
-      let line = '';
-      for (let c = 0; c < w; c++) {
-        let colUp = true;
-        for (let i = 0; i < cc.length; i++) {
-          if (cc[i] === c) { colUp = cu[i]; break; }
-        }
-        const color = colUp ? palette.success : palette.danger;
-        let hasBody = false;
-        let hasWick = false;
-        for (let sr = 0; sr < 2; sr++) {
-          if ((covBody[r * 2 + sr][c] || 0) > 0.01) hasBody = true;
-          if ((covWick[r * 2 + sr][c] || 0) > 0.01) hasWick = true;
-        }
-        if (hasBody) {
-          line += color + '█' + escape.reset;
-        } else if (hasWick) {
-          line += color + '|' + escape.reset;
+  for (let r = 0; r < h; r++) {
+    let line = '';
+    for (let c = 0; c < w; c++) {
+      if (grid[r][c]) line += grid[r][c].color + grid[r][c].ch + escape.reset;
+      else {
+        if (xgridSet.has(c)) {
+          if (xlabelsSet.has(c)) line += toAnsi({ fg: '#8ab6bb' }) + '·' + escape.reset;
+          else line += escape.fg(0x3a, 0x3a, 0x3a) + '·' + escape.reset;
+        } else if (ygrid.has(r)) {
+          line += escape.fg(0x3a, 0x3a, 0x3a) + '·' + escape.reset;
         } else {
-          if (xgridSet.has(c)) {
-            if (xlabelsSet.has(c)) line += toAnsi({ fg: '#8ab6bb' }) + '·' + escape.reset;
-            else line += escape.fg(0x3a, 0x3a, 0x3a) + '·' + escape.reset;
-          } else if (ygrid.has(r)) {
-            line += escape.fg(0x3a, 0x3a, 0x3a) + '·' + escape.reset;
-          } else {
-            line += ' ';
-          }
+          line += ' ';
         }
       }
-      if (node.showAxis) {
-        let lab = ylabels.get(r) || '';
-        line = escape.fg(0x66, 0x66, 0x66) + padRight(lab, axisW) + escape.reset + line;
-      }
-      ctx.out.push({ content: truncateTo(line, totalW), width: Math.min(textWidth(line), totalW) });
     }
-  } else {
-    for (let r = 0; r < h; r++) {
-      let line = '';
-      for (let c = 0; c < w; c++) {
-        if (grid[r][c]) line += grid[r][c].color + grid[r][c].ch + escape.reset;
-        else {
-          if (xgridSet.has(c)) {
-            if (xlabelsSet.has(c)) line += toAnsi({ fg: '#8ab6bb' }) + '·' + escape.reset;
-            else line += escape.fg(0x3a, 0x3a, 0x3a) + '·' + escape.reset;
-          } else if (ygrid.has(r)) {
-            line += escape.fg(0x3a, 0x3a, 0x3a) + '·' + escape.reset;
-          } else {
-            line += ' ';
-          }
-        }
-      }
-      if (node.showAxis) {
-        let lab = ylabels.get(r) || '';
-        line = escape.fg(0x66, 0x66, 0x66) + padRight(lab, axisW) + escape.reset + line;
-      }
-      ctx.out.push({ content: truncateTo(line, totalW), width: Math.min(textWidth(line), totalW) });
+    if (node.showAxis) {
+      let lab = ylabels.get(r) || '';
+      line = escape.fg(0x66, 0x66, 0x66) + padRight(lab, axisW) + escape.reset + line;
     }
+    ctx.out.push({ content: truncateTo(line, totalW), width: Math.min(textWidth(line), totalW) });
   }
   if (node.showAxis && labels.length) {
     let bl = ' '.repeat(axisW);

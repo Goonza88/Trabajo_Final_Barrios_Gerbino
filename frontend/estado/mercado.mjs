@@ -15,7 +15,10 @@ export function crearEstado({ symbol = 'BTCUSDT', interval = '1m', limite = 200 
     zoomX: 80,
     zoomY: 1.0,
     offset: 0,
-    offsetY: 0
+    offsetY: 0,
+    precision: false,
+    zoomYBeforePrecision: null,
+    zoomYSnap: [0.4, 0.5, 0.6, 0.8, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0]
   };
 
   async function cargar() {
@@ -49,6 +52,18 @@ export function crearEstado({ symbol = 'BTCUSDT', interval = '1m', limite = 200 
   }
 
   function zoomV(dir) {
+    if (estado.precision) {
+      const list = estado.zoomYSnap;
+      const idx = list.findIndex(v => Math.abs(v - estado.zoomY) < 1e-6);
+      if (dir === '+') {
+        const next = idx <= 0 ? 0 : idx - 1;
+        estado.zoomY = list[next];
+      } else if (dir === '-') {
+        const next = idx < 0 ? list.findIndex(v => v >= estado.zoomY) : idx + 1;
+        estado.zoomY = list[next >= list.length ? list.length - 1 : next];
+      }
+      return;
+    }
     if (dir === '+') estado.zoomY = Math.max(0.4, estado.zoomY - 0.1);
     if (dir === '-') estado.zoomY = Math.min(3, estado.zoomY + 0.1);
   }

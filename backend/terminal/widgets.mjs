@@ -97,7 +97,6 @@ export function candlechart(opts = {}) {
     showAxis: opts.showAxis ?? true,
     interval: opts.interval ?? '1m',
     zoomY: opts.zoomY ?? 1.0,
-    offsetY: opts.offsetY ?? 0,
-    half: opts.half ?? false
+    offsetY: opts.offsetY ?? 0
   };
 }

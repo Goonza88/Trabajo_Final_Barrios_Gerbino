@@ -36,7 +36,7 @@ export function vistaMercado(estado, modoTabla = false) {
 
   if (modoTabla) {
     const chart = box(rows([
-      text(estado.symbol + ' ' + estado.interval + ' @ binance | ultimo:' + (estado.ultimo ?? '-') + ' | delta:' + (cambio(estado.velas) ?? '-') + ' | act:' + fmtHora(estado.actualizado_en) + ' | a:1m s:5m d:1h f:4h g:1d  t:grafico h/j/k/l:pan y/o:tiempo u/i:precio q', { fg: 'accent' }),
+      text(estado.symbol + ' ' + estado.interval + ' @ binance | ultimo:' + (estado.ultimo ?? '-') + ' | delta:' + (cambio(estado.velas) ?? '-') + ' | act:' + fmtHora(estado.actualizado_en) + ' | a:1m s:5m d:1h f:4h g:1d  t:grafico h/j/k/l:pan y/o:tiempo u/i:precio p:prec' + (estado.precision ? '(on)' : '(off)') + ' q', { fg: 'accent' }),
       { type: 'gap', h: 1 },
       table({ headers: ['hora', 'open', 'high', 'low', 'close', 'vol'], rows: filas, fill: true, align: 'center' }),
       estado.error ? text('err: ' + estado.error, { fg: 'danger' }) : null
@@ -45,7 +45,7 @@ export function vistaMercado(estado, modoTabla = false) {
   }
 
   const chart = box(rows([
-    text(estado.symbol + ' ' + estado.interval + ' @ binance | ultimo:' + (estado.ultimo ?? '-') + ' | delta:' + (cambio(estado.velas) ?? '-') + ' | act:' + fmtHora(estado.actualizado_en) + ' | a:1m s:5m d:1h f:4h g:1d  t:tabla h/j/k/l:pan y/o:tiempo u/i:precio q', { fg: 'accent' }),
+    text(estado.symbol + ' ' + estado.interval + ' @ binance | ultimo:' + (estado.ultimo ?? '-') + ' | delta:' + (cambio(estado.velas) ?? '-') + ' | act:' + fmtHora(estado.actualizado_en) + ' | a:1m s:5m d:1h f:4h g:1d  t:tabla h/j/k/l:pan y/o:tiempo u/i:precio p:prec' + (estado.precision ? '(on)' : '(off)') + ' q', { fg: 'accent' }),
     { type: 'gap', h: 1 },
     candlechart({ candles: vis, height: h - 6, showAxis: true, interval: estado.interval, zoomY: estado.zoomY, offsetY: estado.offsetY || 0 })
   ].concat(estado.error ? [text('err: ' + estado.error, { fg: 'danger' })] : [])), { border: 'round', pad: [0, 1], height: h });
