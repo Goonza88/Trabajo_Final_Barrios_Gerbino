@@ -54,15 +54,12 @@ export function box(child, opts = {}) {
 }
 
 // tabla simple: cabeceras, filas y una fila seleccionada (cursor)
-export function table(opts = {}) {
+export function table(opts) {
   return {
     type: 'table',
     headers: opts.headers || [],
     rows: opts.rows || [],
-    cursor: opts.cursor ?? null,
-    fill: opts.fill ?? false,
-    widths: opts.widths || null,
-    align: opts.align || null
+    cursor: opts.cursor ?? null
   };
 }
 
@@ -87,5 +84,20 @@ export function input(opts = {}) {
     placeholder: String(opts.placeholder ?? ''),
     focused: opts.focused ?? false,
     width: opts.width ?? null
+  };
+}
+
+// grafico de velas simple
+export function candlechart(opts = {}) {
+  return {
+    type: 'candlechart',
+    candles: opts.candles || [],
+    height: opts.height ?? 12,
+    width: opts.width ?? null,
+    showAxis: opts.showAxis ?? true,
+    interval: opts.interval ?? '1m',
+    zoomY: opts.zoomY ?? 1.0,
+    offsetY: opts.offsetY ?? 0,
+    half: opts.half ?? false
   };
 }

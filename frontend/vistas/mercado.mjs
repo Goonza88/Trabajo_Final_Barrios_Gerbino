@@ -1,4 +1,4 @@
-import { box, rows, text, table, split } from '../../backend/terminal/widgets.mjs';
+import { box, rows, text, table, candlechart } from '../../backend/terminal/widgets.mjs';
 import { size } from '../../backend/terminal/runtime.mjs';
 import { restar, formatear } from '../../backend/metricas/decimal.mjs';
 
@@ -14,10 +14,18 @@ function cambio(velas) {
   }
 }
 
-export function vistaMercado(estado) {
+function fmtHora(ts) {
+  if (!ts) return '-';
+  try { return new Date(ts).toLocaleTimeString('es-AR'); } catch { return '-'; }
+}
+
+export function vistaMercado(estado, modoTabla = false) {
   const h = size().rows;
-  const velas = estado.velas.slice(-15).reverse();
-  const filas = velas.map(v => [
+  const total = estado.velas.length;
+  const start = Math.max(0, total - estado.zoomX - estado.offset);
+  const end = Math.max(start, total - estado.offset);
+  const vis = estado.velas.slice(start, end);
+  const filas = vis.slice().reverse().map(v => [
     new Date(v.open_time).toLocaleTimeString('es-AR'),
     v.open,
     v.high,
@@ -26,18 +34,21 @@ export function vistaMercado(estado) {
     v.volume
   ]);
 
-  const header = box(rows([
-    text(estado.symbol + ' ' + estado.interval + ' @ binance', { fg: 'accent', bold: true }),
-    text('ultimo: ' + (estado.ultimo ?? '-'), { fg: 'text' }),
-    text('delta ult vela: ' + (cambio(estado.velas) ?? '-'), { fg: 'sec' }),
-    estado.error ? text('err: ' + estado.error, { fg: 'danger' }) : null
-  ].filter(Boolean)), { border: 'round', pad: [0, 1] });
+  if (modoTabla) {
+    const chart = box(rows([
+      text(estado.symbol + ' ' + estado.interval + ' @ binance | ultimo:' + (estado.ultimo ?? '-') + ' | delta:' + (cambio(estado.velas) ?? '-') + ' | act:' + fmtHora(estado.actualizado_en) + ' | a:1m s:5m d:1h f:4h g:1d  t:grafico h/j/k/l:pan y/o:tiempo u/i:precio q', { fg: 'accent' }),
+      { type: 'gap', h: 1 },
+      table({ headers: ['hora', 'open', 'high', 'low', 'close', 'vol'], rows: filas, fill: true, align: 'center' }),
+      estado.error ? text('err: ' + estado.error, { fg: 'danger' }) : null
+    ].filter(Boolean)), { border: 'round', pad: [0, 1], height: h });
+    return chart;
+  }
 
-  const tabla = box(rows([
-    text('velas (ultimas)', { fg: 'accent' }),
+  const chart = box(rows([
+    text(estado.symbol + ' ' + estado.interval + ' @ binance | ultimo:' + (estado.ultimo ?? '-') + ' | delta:' + (cambio(estado.velas) ?? '-') + ' | act:' + fmtHora(estado.actualizado_en) + ' | a:1m s:5m d:1h f:4h g:1d  t:tabla h/j/k/l:pan y/o:tiempo u/i:precio q', { fg: 'accent' }),
     { type: 'gap', h: 1 },
-    table({ headers: ['hora', 'open', 'high', 'low', 'close', 'vol'], rows: filas, fill: true, align: 'center' })
-  ]), { border: 'round', pad: [0, 1], height: Math.max(5, h - 8) });
+    candlechart({ candles: vis, height: h - 6, showAxis: true, interval: estado.interval, zoomY: estado.zoomY, offsetY: estado.offsetY || 0 })
+  ].concat(estado.error ? [text('err: ' + estado.error, { fg: 'danger' })] : [])), { border: 'round', pad: [0, 1], height: h });
 
-  return split({ dir: 'v', gap: 1, children: [header, tabla] });
+  return chart;
 }

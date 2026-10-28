@@ -73,7 +73,336 @@ const WIDGETS = {
   table: paintTable,
   bar: (ctx, node, w) => pushStyled(ctx, barLine(node, w), '', w),
   input: paintInput,
+  candlechart: paintCandlechart,
 };
+
+const BLOCK8 = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+
+function paintCandlechart(ctx, node, width) {
+  const candles = node.candles || [];
+  if (!candles.length) {
+    ctx.out.push({ content: palette.muted + 'sin velas' + escape.reset, width: textWidth('sin velas') });
+    return;
+  }
+  const h = Math.max(6, node.height || 14);
+  const axisW = node.showAxis ? 9 : 0;
+  const totalW = (node.width ?? width);
+  const w = Math.max(1, totalW - axisW);
+  const zoomY = node.zoomY || 1.0;
+  const offsetY = node.offsetY || 0;
+  const useHalf = node.half !== false;
+  const toLog = (v) => Math.log10(Math.max(Number(v), 1e-18));
+  let lmin = Infinity, lmax = -Infinity;
+  for (const c of candles) {
+    const lo = toLog(c.low), hi = toLog(c.high);
+    if (lo < lmin) lmin = lo;
+    if (hi > lmax) lmax = hi;
+  }
+  if (lmin === lmax) { lmin -= 0.002; lmax += 0.002; }
+  const span = (lmax - lmin) * zoomY;
+  lmin = lmin - (span - (lmax - lmin)) / 2 + offsetY;
+  lmax = lmin + span;
+  if (lmax - lmin < 1e-12) { lmin -= 0.001; lmax += 0.001; }
+  const slice = candles;
+  if (lmax - lmin < 1e-12) { lmin -= 0.001; lmax += 0.001; }
+  const lrange = lmax - lmin || 1;
+  function py(v) {
+    const p = (lmax - toLog(v)) / lrange;
+    return p * (h - 1);
+  }
+  function y(v) {
+    return Math.round(py(v));
+  }
+  const interval = node.interval || '1m';
+  const labels = [];
+  const xg = [];
+
+  function colForIndex(i) {
+    if (slice.length <= 1) return Math.floor(w / 2);
+    return Math.round((i / Math.max(1, slice.length - 1)) * (w - 1));
+  }
+
+  function fmtTime(ts) {
+    const d = new Date(ts);
+    if (interval === '1d') return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+    if (interval === '4h') return d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    if (interval === '1h') return d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  if (slice.length > 1) {
+    const t0 = slice[0].open_time;
+    const t1 = slice[slice.length - 1].open_time;
+    const spanMs = Math.max(1, t1 - t0);
+    const steps = [60000, 300000, 900000, 1800000, 3600000, 7200000, 14400000, 21600000, 43200000, 86400000, 172800000, 604800000];
+    let stepMs = steps[0];
+    let best = Infinity;
+    for (let i = 0; i < steps.length; i++) {
+      const cnt = spanMs / steps[i];
+      const score = Math.abs(cnt - 5.5);
+      if (score < best) {
+        best = score;
+        stepMs = steps[i];
+        continue;
+      }
+      if (cnt >= 4 && cnt <= 7 && score === best) {
+        stepMs = steps[i];
+      }
+    }
+    const align = stepMs;
+    let t = Math.floor(t0 / align) * align;
+    while (t <= t1 + align) {
+      let bestI = 0, bestD = Infinity;
+      for (let i = 0; i < slice.length; i++) {
+        const d = Math.abs(slice[i].open_time - t);
+        if (d < bestD) { bestD = d; bestI = i; }
+      }
+      if (bestD <= align * 0.6) {
+        const c = colForIndex(bestI);
+        if (c >= 0 && c < w && !xg.some(x => Math.abs(x - c) < 1)) {
+          xg.push(c);
+          labels.push({ i: c, t: fmtTime(t) });
+        }
+      }
+      t += align;
+    }
+  }
+
+  if (labels.length === 0 && slice.length > 1) {
+    const mid = Math.floor(slice.length / 2);
+    const c = colForIndex(mid);
+    labels.push({ i: c, t: fmtTime(slice[mid].open_time) });
+    xg.push(c);
+  }
+
+  xg.sort((a,b)=>a-b);
+  labels.sort((a,b)=>a.i-b.i);
+  node._xlabels = labels.map(l => l.i);
+  const xlabelsSet = new Set(node._xlabels);
+  const xgridSet = new Set(xg);
+  const grid = Array.from({ length: h }, () => Array(w).fill(null));
+  const count = slice.length;
+  if (useHalf) {
+    const sub = 2;
+    const h2 = h * sub;
+    const covWick = Array.from({ length: h2 }, () => Array(w).fill(0));
+    const covBody = Array.from({ length: h2 }, () => Array(w).fill(0));
+    function fillInterval(arr, col, p1, p2) {
+      if (col < 0 || col >= w) return;
+      const minP = Math.min(p1, p2);
+      const maxP = Math.max(p1, p2);
+      if (maxP < -0.5 || minP > h - 0.5) return;
+      for (let sr = 0; sr < h2; sr++) {
+        const s0 = sr / sub;
+        const s1s = (sr + 1) / sub;
+        if (s1s <= minP - 1e-6 || s0 >= maxP + 1e-6) continue;
+        const im = Math.max(minP, s0);
+        const ix = Math.min(maxP, s1s);
+        if (ix <= im) continue;
+        const scov = (ix - im) / (s1s - s0);
+        if (scov > arr[sr][col]) arr[sr][col] = Math.min(1, scov);
+      }
+    }
+    function fillBody(arr, col, p1, p2) {
+      if (col < 0 || col >= w) return;
+      const minP = Math.min(p1, p2);
+      const maxP = Math.max(p1, p2);
+      if (maxP < -0.5 || minP > h - 0.5) return;
+      for (let sr = 0; sr < h2; sr++) {
+        const s0 = sr / sub;
+        const s1s = (sr + 1) / sub;
+        if (s1s <= minP - 1e-6 || s0 >= maxP + 1e-6) continue;
+        const im = Math.max(minP, s0);
+        const ix = Math.min(maxP, s1s);
+        if (ix <= im) continue;
+        const scov = (ix - im) / (s1s - s0);
+        if (scov > arr[sr][col]) arr[sr][col] = Math.min(1, scov);
+      }
+    }
+    for (let i = 0; i < count; i++) {
+      const c = slice[i];
+      const o = Number(c.open), cl = Number(c.close), lo = Number(c.low), hi = Number(c.high);
+      const pH = py(hi), pL = py(lo), pO = py(o), pC = py(cl);
+      const up = cl >= o;
+      const col = colForIndex(i);
+      if (hi > lo) fillInterval(covWick, col, pH, pL);
+      else {
+        const minP = Math.min(pH,pL);
+        fillInterval(covWick, col, Math.max(0, minP - 1e-3), Math.min(h-1, minP + 1e-3));
+      }
+      if (o !== cl) fillBody(covBody, col, pO, pC);
+      else {
+        const minP = Math.min(pO,pC);
+        fillBody(covBody, col, Math.max(0, minP - 1e-3), Math.min(h-1, minP + 1e-3));
+      }
+      node._candleUp = node._candleUp || [];
+      node._candleUp[i] = up;
+      node._candleCol = node._candleCol || [];
+      node._candleCol[i] = col;
+    }
+    node._covWick = covWick;
+    node._covBody = covBody;
+    node._h2 = h2;
+    node._w = w;
+    node._h = h;
+  } else {
+    for (let i = 0; i < count; i++) {
+      const c = slice[i];
+      const o = Number(c.open), cl = Number(c.close), lo = Number(c.low), hi = Number(c.high);
+      const pH = py(hi), pL = py(lo), pO = py(o), pC = py(cl);
+      const up = cl >= o;
+      const col = colForIndex(i);
+      if (hi > lo) {
+        const minP = Math.min(pH, pL);
+        const maxP = Math.max(pH, pL);
+        let r1w = Math.floor(minP);
+        let r2w = Math.ceil(maxP);
+        if (r2w <= r1w) {
+          r1w = Math.floor(minP);
+          r2w = r1w + 1;
+        }
+        r1w = Math.max(0, Math.min(h - 1, r1w));
+        r2w = Math.max(0, Math.min(h - 1, r2w));
+        if (r2w < r1w) { const tmp = r1w; r1w = r2w; r2w = tmp; }
+        for (let r = r1w; r <= r2w; r++) {
+          if (grid[r] && col >= 0 && col < w) grid[r][col] = { ch: '|', color: up ? palette.success : palette.danger };
+        }
+      } else {
+        const yM = Math.round((pH + pL) / 2);
+        const r = Math.max(0, Math.min(h - 1, yM));
+        if (grid[r] && col >= 0 && col < w) grid[r][col] = { ch: '|', color: up ? palette.success : palette.danger };
+      }
+      if (o !== cl) {
+        const minPB = Math.min(pO, pC);
+        const maxPB = Math.max(pO, pC);
+        let r1b = Math.floor(minPB);
+        let r2b = Math.ceil(maxPB);
+        if (r2b <= r1b) {
+          r1b = Math.floor(minPB);
+          r2b = r1b + 1;
+        }
+        r1b = Math.max(0, Math.min(h - 1, r1b));
+        r2b = Math.max(0, Math.min(h - 1, r2b));
+        if (r2b < r1b) { const tmp = r1b; r1b = r2b; r2b = tmp; }
+        for (let r = r1b; r <= r2b; r++) {
+          if (grid[r] && col >= 0 && col < w) grid[r][col] = { ch: '█', color: up ? palette.success : palette.danger };
+        }
+      } else {
+        const yM = Math.round((pO + pC) / 2);
+        const r = Math.max(0, Math.min(h - 1, yM));
+        if (grid[r] && col >= 0 && col < w) grid[r][col] = { ch: '█', color: up ? palette.success : palette.danger };
+      }
+    }
+  }
+  function fmt(v) {
+    if (v >= 1000) return v.toFixed(0);
+    if (v >= 10) return v.toFixed(1);
+    if (v >= 1) return v.toFixed(2);
+    return v.toFixed(4);
+  }
+  function fromLog(l) { return Math.pow(10, l); }
+
+  const ygrid = new Set();
+  const ylabels = new Map();
+  const spanLog = Math.abs(lmax - lmin);
+  let stepLog = 1;
+  if (spanLog < 0.012) stepLog = 0.001;
+  else if (spanLog < 0.06) stepLog = 0.002;
+  else if (spanLog < 0.12) stepLog = 0.005;
+  else if (spanLog < 0.25) stepLog = 0.01;
+  else if (spanLog < 0.5) stepLog = 0.02;
+  else if (spanLog < 0.9) stepLog = 0.05;
+  else if (spanLog < 1.5) stepLog = 0.1;
+  else if (spanLog < 3) stepLog = 0.25;
+  else if (spanLog < 7) stepLog = 0.5;
+  else stepLog = 1;
+  const startLog = Math.floor(lmin / stepLog) * stepLog;
+  for (let lv = startLog; lv <= lmax + stepLog * 2; lv += stepLog) {
+    const price = fromLog(lv);
+    if (price < 1e-18) continue;
+    const p = (lmax - lv) / lrange;
+    const r = Math.round(p * (h - 1));
+    if (r < -1 || r > h) continue;
+    const rr = Math.max(0, Math.min(h - 1, r));
+    ygrid.add(rr);
+    if (!ylabels.has(rr)) ylabels.set(rr, fmt(price));
+  }
+
+  if (useHalf && node._covWick && node._covBody) {
+    const covWick = node._covWick;
+    const covBody = node._covBody;
+    const cc = node._candleCol || [];
+    const cu = node._candleUp || [];
+    for (let r = 0; r < h; r++) {
+      let line = '';
+      for (let c = 0; c < w; c++) {
+        let colUp = true;
+        for (let i = 0; i < cc.length; i++) {
+          if (cc[i] === c) { colUp = cu[i]; break; }
+        }
+        const color = colUp ? palette.success : palette.danger;
+        let hasBody = false;
+        let hasWick = false;
+        for (let sr = 0; sr < 2; sr++) {
+          if ((covBody[r * 2 + sr][c] || 0) > 0.01) hasBody = true;
+          if ((covWick[r * 2 + sr][c] || 0) > 0.01) hasWick = true;
+        }
+        if (hasBody) {
+          line += color + '█' + escape.reset;
+        } else if (hasWick) {
+          line += color + '|' + escape.reset;
+        } else {
+          if (xgridSet.has(c)) {
+            if (xlabelsSet.has(c)) line += toAnsi({ fg: '#8ab6bb' }) + '·' + escape.reset;
+            else line += escape.fg(0x3a, 0x3a, 0x3a) + '·' + escape.reset;
+          } else if (ygrid.has(r)) {
+            line += escape.fg(0x3a, 0x3a, 0x3a) + '·' + escape.reset;
+          } else {
+            line += ' ';
+          }
+        }
+      }
+      if (node.showAxis) {
+        let lab = ylabels.get(r) || '';
+        line = escape.fg(0x66, 0x66, 0x66) + padRight(lab, axisW) + escape.reset + line;
+      }
+      ctx.out.push({ content: truncateTo(line, totalW), width: Math.min(textWidth(line), totalW) });
+    }
+  } else {
+    for (let r = 0; r < h; r++) {
+      let line = '';
+      for (let c = 0; c < w; c++) {
+        if (grid[r][c]) line += grid[r][c].color + grid[r][c].ch + escape.reset;
+        else {
+          if (xgridSet.has(c)) {
+            if (xlabelsSet.has(c)) line += toAnsi({ fg: '#8ab6bb' }) + '·' + escape.reset;
+            else line += escape.fg(0x3a, 0x3a, 0x3a) + '·' + escape.reset;
+          } else if (ygrid.has(r)) {
+            line += escape.fg(0x3a, 0x3a, 0x3a) + '·' + escape.reset;
+          } else {
+            line += ' ';
+          }
+        }
+      }
+      if (node.showAxis) {
+        let lab = ylabels.get(r) || '';
+        line = escape.fg(0x66, 0x66, 0x66) + padRight(lab, axisW) + escape.reset + line;
+      }
+      ctx.out.push({ content: truncateTo(line, totalW), width: Math.min(textWidth(line), totalW) });
+    }
+  }
+  if (node.showAxis && labels.length) {
+    let bl = ' '.repeat(axisW);
+    for (const lab of labels) {
+      const pos = textWidth(bl) - axisW;
+      if (pos >= lab.i) continue;
+      bl += ' '.repeat(lab.i - pos);
+      bl += palette.sec + lab.t + escape.reset;
+      if (textWidth(bl) >= totalW) break;
+    }
+    ctx.out.push({ content: truncateTo(bl, totalW), width: Math.min(textWidth(bl), totalW) });
+  }
+}
 
 // emite un nodo en el buffer o lanza si el tipo es desconocido
 function emitNode(ctx, node, w) {
@@ -224,11 +553,8 @@ function paintTable(ctx, node, width) {
   const rowsArr = node.rows || [];
   const colCount = Math.max(node.headers?.length || 0, rowsArr[0]?.length || 0);
   if (!colCount) return;
-  const colWidths = [];
-  if (node.widths) {
-    for (let col = 0; col < colCount; col++) colWidths[col] = Math.max(0, node.widths[col] || 0);
-  }
-  if (node.headers) for (let col = 0; col < colCount; col++) colWidths[col] = Math.max(colWidths[col] || 0, textWidth(String(node.headers[col] ?? '')));
+  const colWidths = []; // ancho = maximo contenido que tiene
+  if (node.headers) for (let col = 0; col < colCount; col++) colWidths[col] = textWidth(String(node.headers[col] ?? ''));
   for (const row of rowsArr) {
     for (let col = 0; col < colCount; col++) {
       const cell = row && col < row.length ? row[col] : null;
@@ -236,33 +562,10 @@ function paintTable(ctx, node, width) {
     }
   }
   const gapW = 1;
-  if (node.fill && !node.widths) {
-    const used = colWidths.reduce((a, b) => a + b, 0) + gapW * Math.max(0, colCount - 1);
-    let extra = width - used;
-    if (extra > 0) {
-      const base = Math.floor(extra / colCount);
-      let rem = extra % colCount;
-      for (let i = 0; i < colCount; i++) {
-        colWidths[i] += base + (rem > 0 ? 1 : 0);
-        if (rem > 0) rem--;
-      }
-    }
-  }
-  function padCell(str, w) {
-    const s = String(str ?? '');
-    const sw = textWidth(s);
-    if (sw >= w) return s;
-    if (node.align === 'center' || node.align === 'mid') {
-      const left = Math.floor((w - sw) / 2);
-      const right = w - sw - left;
-      return ' '.repeat(left) + s + ' '.repeat(right);
-    }
-    return s + ' '.repeat(w - sw);
-  }
-  const header = node.headers ? node.headers.map((head, col) => padCell(head, colWidths[col])).join(' '.repeat(gapW)) : '';
+  const header = node.headers ? node.headers.map((head, col) => padRight(String(head), colWidths[col])).join(' '.repeat(gapW)) : '';
   if (header) pushStyled(ctx, header, palette.muted, width);
   for (let row = 0; row < rowsArr.length; row++) {
-    const cells = rowsArr[row].map((cell, col) => padCell(cell, colWidths[col])).join(' '.repeat(gapW));
+    const cells = rowsArr[row].map((cell, col) => padRight(String(cell ?? ''), colWidths[col])).join(' '.repeat(gapW));
     const isSelected = node.cursor != null && row === node.cursor;
     const line = isSelected ? applyBg(cells, toAnsi({ bg: 'selected' })) : cells;
     ctx.out.push({ content: truncateTo(line, width), width: Math.min(textWidth(cells), width) });

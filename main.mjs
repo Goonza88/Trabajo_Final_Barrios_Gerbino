@@ -52,27 +52,49 @@ const home = {
   },
 };
 
+let modoTabla = false;
+
 function mercadoApp() {
-  const { estado, cargar } = crearEstado({ symbol: 'BTCUSDT', interval: '1m', limite: 100 });
+  const { estado, cargar, setIntervalo, zoomH, zoomV, mover } = crearEstado({ symbol: 'BTCUSDT', interval: '1m', limite: 200 });
   return {
     init: async () => {
+      modoTabla = false;
       await cargar();
       return estado;
     },
     subscriptions: [Sub.interval(5000, 'poll')],
     update: async (model, event) => {
-      if (event.type === 'key' && (event.key === 'q' || event.key === 'h')) {
-        stop();
-        run(home);
-        return model;
+      if (event.type === 'key') {
+        if (event.key === 'q') {
+          stop();
+          run(home);
+          return model;
+        }
+        if (event.key === 't') {
+          modoTabla = !modoTabla;
+          return estado;
+        }
+        if (event.key === 'a') { await setIntervalo('1m'); return estado; }
+        if (event.key === 's') { await setIntervalo('5m'); return estado; }
+        if (event.key === 'd') { await setIntervalo('1h'); return estado; }
+        if (event.key === 'f') { await setIntervalo('4h'); return estado; }
+        if (event.key === 'g') { await setIntervalo('1d'); return estado; }
+        if (event.key === 'h') { mover('h'); return estado; }
+        if (event.key === 'j') { mover('j'); return estado; }
+        if (event.key === 'k') { mover('k'); return estado; }
+        if (event.key === 'l') { mover('l'); return estado; }
+        if (event.key === 'y') { zoomH('-'); return estado; }
+        if (event.key === 'o') { zoomH('+'); return estado; }
+        if (event.key === 'u') { zoomV('-'); return estado; }
+        if (event.key === 'i') { zoomV('+'); return estado; }
       }
       if (event.type === 'sub:tick' && event.tag === 'poll') {
-        await cargar();
+        cargar();
         return estado;
       }
       return model;
     },
-    view: () => vistaMercado(estado)
+    view: () => vistaMercado(estado, modoTabla)
   };
 }
 
