@@ -76,8 +76,6 @@ const WIDGETS = {
   candlechart: paintCandlechart,
 };
 
-const BLOCK8 = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
-
 function paintCandlechart(ctx, node, width) {
   const candles = node.candles || [];
   if (!candles.length) {
@@ -181,51 +179,34 @@ function paintCandlechart(ctx, node, width) {
   const xgridSet = new Set(xg);
   const grid = Array.from({ length: h }, () => Array(w).fill(null));
   const count = slice.length;
+
+  // filas de la grilla (0..h-1) cubren bandas continuas [r-0.5, r+0.5)
+  function rowsCovered(p1, p2) {
+    const minP = Math.min(p1, p2);
+    const maxP = Math.max(p1, p2);
+    if (maxP <= -0.5 || minP >= h - 0.5) return [];
+    const rows = [];
+    for (let r = 0; r < h; r++) {
+      const ov = Math.min(maxP, r + 0.5) - Math.max(minP, r - 0.5);
+      if (ov > 1e-9) rows.push(r);
+    }
+    if (!rows.length) rows.push(Math.max(0, Math.min(h - 1, Math.round((minP + maxP) / 2))));
+    return rows;
+  }
+
   for (let i = 0; i < count; i++) {
     const c = slice[i];
     const o = Number(c.open), cl = Number(c.close), lo = Number(c.low), hi = Number(c.high);
-    const pH = py(hi), pL = py(lo), pO = py(o), pC = py(cl);
     const up = cl >= o;
+    const color = up ? palette.success : palette.danger;
     const col = colForIndex(i);
-    if (hi > lo) {
-      const minP = Math.min(pH, pL);
-      const maxP = Math.max(pH, pL);
-      let r1w = Math.floor(minP);
-      let r2w = Math.ceil(maxP);
-      if (r2w <= r1w) {
-        r1w = Math.floor(minP);
-        r2w = r1w + 1;
-      }
-      r1w = Math.max(0, Math.min(h - 1, r1w));
-      r2w = Math.max(0, Math.min(h - 1, r2w));
-      if (r2w < r1w) { const tmp = r1w; r1w = r2w; r2w = tmp; }
-      for (let r = r1w; r <= r2w; r++) {
-        if (grid[r] && col >= 0 && col < w) grid[r][col] = { ch: '|', color: up ? palette.success : palette.danger };
-      }
-    } else {
-      const yM = Math.round((pH + pL) / 2);
-      const r = Math.max(0, Math.min(h - 1, yM));
-      if (grid[r] && col >= 0 && col < w) grid[r][col] = { ch: '|', color: up ? palette.success : palette.danger };
+    if (col < 0 || col >= w) continue;
+    const pH = py(hi), pL = py(lo), pO = py(o), pC = py(cl);
+    for (const r of rowsCovered(pH, pL)) {
+      if (grid[r]) grid[r][col] = { ch: '|', color };
     }
-    if (o !== cl) {
-      const minPB = Math.min(pO, pC);
-      const maxPB = Math.max(pO, pC);
-      let r1b = Math.floor(minPB);
-      let r2b = Math.ceil(maxPB);
-      if (r2b <= r1b) {
-        r1b = Math.floor(minPB);
-        r2b = r1b + 1;
-      }
-      r1b = Math.max(0, Math.min(h - 1, r1b));
-      r2b = Math.max(0, Math.min(h - 1, r2b));
-      if (r2b < r1b) { const tmp = r1b; r1b = r2b; r2b = tmp; }
-      for (let r = r1b; r <= r2b; r++) {
-        if (grid[r] && col >= 0 && col < w) grid[r][col] = { ch: '█', color: up ? palette.success : palette.danger };
-      }
-    } else {
-      const yM = Math.round((pO + pC) / 2);
-      const r = Math.max(0, Math.min(h - 1, yM));
-      if (grid[r] && col >= 0 && col < w) grid[r][col] = { ch: '█', color: up ? palette.success : palette.danger };
+    for (const r of rowsCovered(pO, pC)) {
+      if (grid[r]) grid[r][col] = { ch: '█', color };
     }
   }
   function fmt(v) {
