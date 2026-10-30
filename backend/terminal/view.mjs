@@ -92,7 +92,7 @@ function paintCandlechart(ctx, node, width) {
   }
   const h = Math.max(6, node.height || 14);
   const axisW = node.showAxis ? 9 : 0;
-  const totalW = (node.width ?? width);
+  const totalW = Math.max(1, Math.min(node.width ?? width, width));
   const w = Math.max(1, totalW - axisW);
   const zoomY = node.zoomY || 1.0;
   const offsetY = node.offsetY || 0;
@@ -109,7 +109,6 @@ function paintCandlechart(ctx, node, width) {
   lmax = lmin + span;
   if (lmax - lmin < 1e-12) { lmin -= 0.001; lmax += 0.001; }
   const slice = candles;
-  if (lmax - lmin < 1e-12) { lmin -= 0.001; lmax += 0.001; }
   const lrange = lmax - lmin || 1;
   function py(v) {
     const p = (lmax - toLog(v)) / lrange;
@@ -182,8 +181,7 @@ function paintCandlechart(ctx, node, width) {
 
   xg.sort((a,b)=>a-b);
   labels.sort((a,b)=>a.i-b.i);
-  node._xlabels = labels.map(l => l.i);
-  const xlabelsSet = new Set(node._xlabels);
+  const xlabelsSet = new Set(labels.map(l => l.i));
   const xgridSet = new Set(xg);
   const grid = Array.from({ length: h }, () => Array(w).fill(null));
   const count = slice.length;
@@ -303,12 +301,14 @@ function paintCandlechart(ctx, node, width) {
   }
   if (node.showAxis && labels.length) {
     let bl = ' '.repeat(axisW);
+    let cursor = axisW;
     for (const lab of labels) {
-      const pos = textWidth(bl) - axisW;
-      if (pos >= lab.i) continue;
-      bl += ' '.repeat(lab.i - pos);
-      bl += palette.sec + lab.t + escape.reset;
-      if (textWidth(bl) >= totalW) break;
+      const start = axisW + lab.i;
+      const labelW = textWidth(lab.t);
+      if (start < cursor) continue;
+      if (start + labelW > totalW) break;
+      bl += ' '.repeat(start - cursor) + palette.sec + lab.t + escape.reset;
+      cursor = start + labelW;
     }
     ctx.out.push({ content: truncateTo(bl, totalW), width: Math.min(textWidth(bl), totalW) });
   }
@@ -461,21 +461,41 @@ function paintCols(ctx, node, width) {
 // pinta header y filas, resalta la fila seleccionada
 function paintTable(ctx, node, width) {
   const rowsArr = node.rows || [];
-  const colCount = Math.max(node.headers?.length || 0, rowsArr[0]?.length || 0);
+  const headers = node.headers || [];
+  const colCount = Math.max(headers.length, ...rowsArr.map(row => row?.length || 0));
   if (!colCount) return;
-  const colWidths = []; // ancho = maximo contenido que tiene
-  if (node.headers) for (let col = 0; col < colCount; col++) colWidths[col] = textWidth(String(node.headers[col] ?? ''));
+  const colWidths = Array.from({ length: colCount }, () => 0); // ancho = maximo contenido que tiene
+  if (headers.length) {
+    for (let col = 0; col < colCount; col++) colWidths[col] = textWidth(String(headers[col] ?? ''));
+  }
   for (const row of rowsArr) {
     for (let col = 0; col < colCount; col++) {
       const cell = row && col < row.length ? row[col] : null;
-      colWidths[col] = Math.max(colWidths[col] || 0, textWidth(String(cell ?? '')));
+      colWidths[col] = Math.max(colWidths[col], textWidth(String(cell ?? '')));
     }
   }
   const gapW = 1;
-  const header = node.headers ? node.headers.map((head, col) => padRight(String(head), colWidths[col])).join(' '.repeat(gapW)) : '';
+  const totalW = colWidths.reduce((sum, n) => sum + n, 0) + gapW * Math.max(0, colCount - 1);
+  if (node.fill && Number.isFinite(width)) {
+    const extra = Math.max(0, width - totalW);
+    const base = Math.floor(extra / colCount);
+    let carry = extra % colCount;
+    for (let col = 0; col < colCount; col++) {
+      colWidths[col] += base + (carry > 0 ? 1 : 0);
+      if (carry > 0) carry--;
+    }
+  }
+  const align = node.align || 'left';
+  const render = (cell, col) => {
+    const text = String(cell ?? '');
+    return padAlign(text, textWidth(text), colWidths[col], align);
+  };
+  const header = headers.length
+    ? Array.from({ length: colCount }, (_, col) => render(headers[col], col)).join(' '.repeat(gapW))
+    : '';
   if (header) pushStyled(ctx, header, palette.muted, width);
   for (let row = 0; row < rowsArr.length; row++) {
-    const cells = rowsArr[row].map((cell, col) => padRight(String(cell ?? ''), colWidths[col])).join(' '.repeat(gapW));
+    const cells = Array.from({ length: colCount }, (_, col) => render(rowsArr[row]?.[col], col)).join(' '.repeat(gapW));
     const isSelected = node.cursor != null && row === node.cursor;
     const line = isSelected ? applyBg(cells, toAnsi({ bg: 'selected' })) : cells;
     ctx.out.push({ content: truncateTo(line, width), width: Math.min(textWidth(cells), width) });

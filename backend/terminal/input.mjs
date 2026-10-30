@@ -56,7 +56,7 @@ function decodeSeq(seq) {
   }
   // lo que no matcheo antes (Esc+byte => Alt+<tecla>) - CSI desconocida => Esc
   if (text[1] !== '[') {
-    const char = text.slice(1)[0];
+    const char = Array.from(text.slice(1))[0] || '';
     return [keyEvent('Alt+' + (controlName(char) || char), { alt: true })];
   }
   return [keyEvent('Esc')];
@@ -102,6 +102,22 @@ export function utf8Pending(buf) {
   return (1 + continuations) < expect ? buf.length - i : 0;
 }
 
+// largo de un caracter UTF-8 completo en buf[i] - 0 si todavia faltan bytes
+function utf8CharLen(buf, i) {
+  const lead = buf[i];
+  if (lead < 0x80) return 1;
+  let expect;
+  if ((lead & 0xe0) === 0xc0) expect = 2;
+  else if ((lead & 0xf0) === 0xe0) expect = 3;
+  else if ((lead & 0xf8) === 0xf0) expect = 4;
+  else return 1; // byte invalido: que lo decodifique el reemplazo de utf8
+  if (i + expect > buf.length) return 0;
+  for (let k = 1; k < expect; k++) {
+    if ((buf[i + k] & 0xc0) !== 0x80) return 1;
+  }
+  return expect;
+}
+
 // largo de la secuencia en buf[i] - 0 si falta el byte final (queda pendiente)
 function seqLen(buf, i) {
   if (i + 1 >= buf.length) return 0;
@@ -111,7 +127,8 @@ function seqLen(buf, i) {
     }
     return 0;
   }
-  return 2;
+  const charLen = utf8CharLen(buf, i + 1);
+  return charLen ? 1 + charLen : 0;
 }
 
 // parte un buffer en texto + secuencias y las decodifica, devuelve { events, pending } con lo incompleto
@@ -147,18 +164,20 @@ export class Dispatcher {
 
   // procesa un chunk juntando lo pendiente y emitiendo los eventos completados
   onData(chunk, emit) {
-    let buf = Buffer.from(chunk);
+    const partes = [];
     // byte nuevo cancela el timer, re-juntado puede completar la secuencia pendiente
     if (this.pendingEsc) {
       clearTimeout(this.escTimer);
       this.escTimer = null;
-      buf = Buffer.concat([this.pendingEsc, buf]);
+      partes.push(this.pendingEsc);
       this.pendingEsc = null;
     }
     if (this.pendingBytes) {
-      buf = Buffer.concat([this.pendingBytes, buf]);
+      partes.push(this.pendingBytes);
       this.pendingBytes = null;
     }
+    partes.push(Buffer.from(chunk));
+    let buf = Buffer.concat(partes);
     const pendingUtf8 = utf8Pending(buf);
     if (pendingUtf8 > 0) {
       this.pendingBytes = Buffer.from(buf.subarray(buf.length - pendingUtf8));

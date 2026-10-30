@@ -18,19 +18,21 @@ export const escape = {
   goto(row, col = 1) { return `\x1b[${row};${col}H`; },
 };
 
+const HEX = /^#[0-9a-fA-F]{6}$/;
+
 // convierte un estilo (obj o string) en los escapes ANSI que lo pintan
 export function toAnsi(style) {
   if (!style) return '';
   if (typeof style === 'string') return style;
   const color = (value, background) => {
     if (typeof value === 'number') return background ? `\x1b[48;5;${value}m` : `\x1b[38;5;${value}m`;
-    if (typeof value === 'string' && value[0] === '#') {
+    if (typeof value === 'string' && HEX.test(value)) {
       const num = parseInt(value.slice(1), 16);
       return background
         ? escape.bg((num >> 16) & 255, (num >> 8) & 255, num & 255)
         : escape.fg((num >> 16) & 255, (num >> 8) & 255, num & 255);
     }
-    if (typeof value === 'string' && value in raw) {
+    if (typeof value === 'string' && Object.hasOwn(raw, value)) {
       const [red, green, blue] = raw[value];
       return background ? escape.bg(red, green, blue) : escape.fg(red, green, blue);
     }
@@ -80,16 +82,16 @@ const raw = {
 // los roles que no vienen en el parcial conservan el color que tenian
 export function setPalette(parcial) {
   for (const [rol, valor] of Object.entries(parcial)) {
-    if (!(rol in raw)) throw new Error(`ansi.setPalette: rol desconocido: ${rol}`);
+    if (!Object.hasOwn(raw, rol)) throw new Error(`ansi.setPalette: rol desconocido: ${rol}`);
     const rgb = aRgb(valor, rol);
     raw[rol] = rgb;
-    if (rol in palette) palette[rol] = escape.fg(...rgb);
+    if (Object.hasOwn(palette, rol)) palette[rol] = escape.fg(...rgb);
   }
 }
 
 // acepta [r,g,b] o '#rrggbb' y devuelve el trio de numeros 0-255
 function aRgb(valor, rol) {
-  if (typeof valor === 'string' && valor[0] === '#') {
+  if (typeof valor === 'string' && HEX.test(valor)) {
     const num = parseInt(valor.slice(1), 16);
     return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
   }

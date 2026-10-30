@@ -59,7 +59,9 @@ export function table(opts) {
     type: 'table',
     headers: opts.headers || [],
     rows: opts.rows || [],
-    cursor: opts.cursor ?? null
+    cursor: opts.cursor ?? null,
+    fill: opts.fill ?? false,
+    align: opts.align ?? 'left'
   };
 }
 

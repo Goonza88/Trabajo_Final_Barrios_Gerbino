@@ -15,10 +15,12 @@ let lastLines    = [];                    // lineas del frame anterior, para com
 let firstFrame   = true;                  // el primer frame limpia la pantalla
 let resizeDirty  = false;                 // al redimensionar hay que repintar todo
 let frameQueued  = false;                 // ya hay un repintado agendado
+let frameTimer   = null;                  // timeout del repintado agendado
 let chain        = Promise.resolve();     // los updates se ejecutan de a uno, en orden
 let timers       = [];                    // ids de los intervalos que hay que limpiar al cerrar
 let detach       = null;                  // saca los listeners cuando la app cierra
 let lastCtrlC    = 0;                     // cuando llego el Ctrl+C anterior, por si hay que insistir
+let generation   = 0;                     // invalida updates viejos cuando se cambia de app
 
 // API =============================================================================================
 
@@ -35,40 +37,54 @@ export function size() { // tamaño de la terminal para que las apps no usen el 
 // init devuelve el modelo inicial - update(model, event) el nuevo - view(model) el arbol
 export function run(desc) {
   if (running) throw new Error('runtime.run: ya hay una app corriendo');
+  validateSubs(desc);
+
+  const gen = ++generation;
   app = desc;
-  running = true;
   dispatcher = new Dispatcher();
   lastLines = [];
   firstFrame = true;
   resizeDirty = false;
   frameQueued = false;
+  frameTimer = null;
   chain = Promise.resolve();
+  lastCtrlC = 0;
+  running = true;
 
-  startSubs();
-  enter();
-  process.stdout.on('resize', onResize);
-  process.stdin.on('data', onStdin);
-  process.on('SIGINT', onSignal);
-  process.on('SIGTERM', onSignal);
-  process.on('uncaughtException', onCrash);
-  process.on('unhandledRejection', onCrash);
-  detach = () => {
-    process.stdout.off('resize', onResize);
-    process.stdin.off('data', onStdin);
-    process.off('SIGINT', onSignal);
-    process.off('SIGTERM', onSignal);
-    process.off('uncaughtException', onCrash);
-    process.off('unhandledRejection', onCrash);
-  };
+  try {
+    startSubs();
+    enter();
+    process.stdout.on('resize', onResize);
+    process.stdin.on('data', onStdin);
+    process.on('SIGINT', onSignal);
+    process.on('SIGTERM', onSignal);
+    process.on('uncaughtException', onCrash);
+    process.on('unhandledRejection', onCrash);
+    detach = () => {
+      process.stdout.off('resize', onResize);
+      process.stdin.off('data', onStdin);
+      process.off('SIGINT', onSignal);
+      process.off('SIGTERM', onSignal);
+      process.off('uncaughtException', onCrash);
+      process.off('unhandledRejection', onCrash);
+    };
+  } catch (error) {
+    stop();
+    throw error;
+  }
 
   // modelo inicial entra por la misma queue - ningun update lo ve a la mitad
   chain = chain.then(async () => {
+    if (!running || gen !== generation) return;
     try {
-      model = (app.init ? await app.init() : null) ?? {};
+      const inicial = (desc.init ? await desc.init() : null) ?? {};
+      if (gen !== generation || !running) return;
+      model = inicial;
     } catch (error) {
-      return crash('init', error);
+      if (gen === generation) return crash('init', error);
+      return;
     }
-    requestFrame();
+    if (gen === generation) requestFrame();
   });
 }
 
@@ -83,33 +99,43 @@ export function quit(code = 0) {
 // mete en queue un evento - los updates se ejecutan de a uno y en orden
 function dispatch(event) {
   if (!running) return;
-  chain = chain.then(() => apply(event));
+  const gen = generation;
+  chain = chain.then(() => apply(event, gen));
 }
 
 // aplica un evento al modelo y pide repintar - update puede ser async y la queue espera
-async function apply(event) {
-  if (!running) return;
+async function apply(event, gen) {
+  if (!running || gen !== generation) return;
   if (event.type === 'key' && event.key === 'Ctrl+c') { // dos Ctrl+c seguidos cierran
     const now = Date.now();
     if (now - lastCtrlC < 600) { quit(0); return; }
     lastCtrlC = now;
   }
-  if (app.update) {
+  const actual = app;
+  if (actual?.update) {
     try {
-      const res = await app.update(model, event);
+      const res = await actual.update(model, event);
+      if (!running || gen !== generation) return;
       model = res ?? model; // si no devuelve, se asume que toco el modelo
     } catch (error) {
+      if (gen !== generation) return;
       return crash('update', error);
     }
   }
-  requestFrame();
+  if (running && gen === generation) requestFrame();
 }
 
 // pide repintar - si ya hay una request no hace nada (evita pintar mas de una vez)
 function requestFrame() {
   if (frameQueued || !running) return;
   frameQueued = true;
-  setTimeout(() => { frameQueued = false; paint(); }, 16);
+  const gen = generation;
+  frameTimer = setTimeout(() => {
+    frameTimer = null;
+    if (!running || gen !== generation) { frameQueued = false; return; }
+    frameQueued = false;
+    paint();
+  }, 16);
 }
 
 // arma el arbol - lo aplana al tamaño de la terminal y escribe las lineas que cambiaron
@@ -144,6 +170,9 @@ function enter() {
 export function stop() {
   if (!running) return;
   running = false;
+  generation++;
+  if (frameTimer) { clearTimeout(frameTimer); frameTimer = null; }
+  frameQueued = false;
   for (const id of timers) clearInterval(id);
   timers = [];
   dispatcher.destroy();
@@ -151,6 +180,9 @@ export function stop() {
   try { process.stdin.setRawMode(false); } catch {}
   process.stdin.pause();
   process.stdout.write(escape.leave + escape.show);
+  app = null;
+  model = null;
+  lastCtrlC = 0;
 }
 
 // el cambio de tamaño repinta todo y la app recibe evento
@@ -184,16 +216,29 @@ function crash(where, error) {
 
 // SUSCRIPCIONES ===================================================================================
 
+// valida el descriptor antes de tocar la terminal - una sub invalida no debe dejar el runtime trabado
+function validateSubs(desc) {
+  if (!desc || typeof desc !== 'object') throw new TypeError('runtime.run: se espera un descriptor de app');
+  const subs = desc.subscriptions ?? [];
+  if (!Array.isArray(subs)) throw new TypeError('runtime.run: subscriptions debe ser una lista');
+  for (const sub of subs) {
+    if (sub?.type !== 'interval' && sub?.type !== 'timeout') {
+      throw new TypeError('runtime.run: subscription desconocida: ' + sub?.type);
+    }
+    if (!Number.isFinite(sub.ms) || sub.ms < 0) {
+      throw new TypeError('runtime.run: subscription sin ms valido');
+    }
+  }
+}
+
 // inicia las subs del descriptor - cada tick entra a la queue como un evento mas
 // los timers (setInterval y setTimeout) quedan en timers, asi que stop() los limpia
 function startSubs() {
   for (const sub of app.subscriptions || []) {
-    if (sub?.type === 'interval') {
+    if (sub.type === 'interval') {
       timers.push(setInterval(() => dispatch({ type: 'sub:tick', tag: sub.tag }), sub.ms));
-    } else if (sub?.type === 'timeout') {
-      timers.push(setTimeout(() => dispatch({ type: 'sub:tick', tag: sub.tag }), sub.ms));
     } else {
-      throw new TypeError('runtime.run: subscription desconocida: ' + sub?.type);
+      timers.push(setTimeout(() => dispatch({ type: 'sub:tick', tag: sub.tag }), sub.ms));
     }
   }
 }
