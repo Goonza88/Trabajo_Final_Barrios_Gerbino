@@ -76,6 +76,14 @@ const WIDGETS = {
   candlechart: paintCandlechart,
 };
 
+// bloques de 1/8 (solo para puntas que caen dentro del cuerpo: ahí el bloque
+// es continuo y no genera una mecha entre dos cuerpos).
+const BLOCK8 = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+// medias líneas verticales finas: conservan el ancho de la mecha y dan
+// precisión de media celda en las puntas.
+const HALF_UP = '╵';
+const HALF_DOWN = '╷';
+
 function paintCandlechart(ctx, node, width) {
   const candles = node.candles || [];
   if (!candles.length) {
@@ -202,11 +210,40 @@ function paintCandlechart(ctx, node, width) {
     const col = colForIndex(i);
     if (col < 0 || col >= w) continue;
     const pH = py(hi), pL = py(lo), pO = py(o), pC = py(cl);
-    for (const r of rowsCovered(pH, pL)) {
+    const wickRows = rowsCovered(pH, pL);
+    const bodyRows = rowsCovered(pO, pC);
+    const bodySet = new Set(bodyRows);
+    for (const r of wickRows) {
       if (grid[r]) grid[r][col] = { ch: '|', color };
     }
-    for (const r of rowsCovered(pO, pC)) {
+    for (const r of bodyRows) {
       if (grid[r]) grid[r][col] = { ch: '█', color };
+    }
+    // puntas: en una celda de cuerpo el bloque de 1/8 queda continuo con el
+    // cuerpo y no genera artefacto; en una celda de mecha se usa una media
+    // línea fina para no convertirla en una celda ancha tipo cuerpo.
+    if (wickRows.length > 1) {
+      const top = wickRows[0];
+      if (pH > -0.5 && pH < h - 0.5) {
+        const f = Math.min(1, Math.max(0, top + 0.5 - pH));
+        if (bodySet.has(top)) {
+          const k = Math.max(1, Math.min(8, Math.round(f * 8)));
+          grid[top][col] = k >= 8 ? { ch: '█', color } : { ch: BLOCK8[k], color };
+        } else if (f < 0.75) {
+          grid[top][col] = { ch: HALF_DOWN, color };
+        }
+      }
+      const bottom = wickRows[wickRows.length - 1];
+      if (pL > -0.5 && pL < h - 0.5) {
+        const u = Math.min(1, Math.max(0, pL - (bottom - 0.5)));
+        if (bodySet.has(bottom)) {
+          const k = Math.max(1, Math.min(8, Math.round(u * 8)));
+          grid[bottom][col] = k >= 8 ? { ch: '█', color }
+            : { ch: BLOCK8[8 - k], color: '\x1b[7m' + color };
+        } else if (u < 0.75) {
+          grid[bottom][col] = { ch: HALF_UP, color };
+        }
+      }
     }
   }
   function fmt(v) {
