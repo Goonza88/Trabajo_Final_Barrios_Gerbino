@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { flatten, diffLines, frameOutput } from '../backend/terminal/view.mjs';
 import { boxSize } from '../backend/terminal/layout.mjs';
 import { box, rows, text, gap, split, table, grid } from '../backend/terminal/widgets.mjs';
-import { textWidth, escape, sanitize } from '../backend/terminal/ansi.mjs';
+import { textWidth, escape, sanitize, toAnsi } from '../backend/terminal/ansi.mjs';
 
 test('box con borde redondo ocupa el ancho pedido', () => {
   const lineas = flatten(box(rows([text('hola')]), { border: 'round', pad: [0, 1] }), 20);
@@ -96,6 +96,15 @@ test('table no pierde columnas de filas mas largas', () => {
   const lineas = flatten(table({ rows: [['x'], ['y', 'z']] }), 20);
   assert.deepEqual(lineas.map(l => l.content.trim()), ['x', 'y z']);
   assert.ok(lineas.every(l => l.width <= 20));
+});
+
+test('table acepta celdas con estilo propio', () => {
+  const lineas = flatten(table({
+    headers: ['valor'],
+    rows: [[{ text: '+1.00%', style: { fg: 'success' } }]],
+  }), 20);
+  assert.equal(sanitize(lineas[1].content).trim(), '+1.00%');
+  assert.ok(lineas[1].content.includes(toAnsi({ fg: 'success' })));
 });
 
 test('grid pinta celdas con roles y respeta ancho y alto', () => {
