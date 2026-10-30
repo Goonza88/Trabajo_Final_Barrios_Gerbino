@@ -13,23 +13,30 @@ function expandir(valor) {
   return digitos.slice(0, punto) + '.' + digitos.slice(punto);
 }
 
-function decimal(valor, campo) {
+function decimal(valor, campo, prefijo = 'normalizarKlines') {
   const texto = typeof valor === 'number' ? expandir(valor) : valor;
   if (typeof texto !== 'string' || !DECIMAL.test(texto)) {
-    throw new Error('normalizarKlines: ' + campo + ' invalido: ' + String(valor));
+    throw new Error(prefijo + ': ' + campo + ' invalido: ' + String(valor));
   }
   return texto;
 }
 
-function entero(valor, campo) {
+function entero(valor, campo, prefijo = 'normalizarKlines') {
   if (valor == null || valor === '') {
-    throw new Error('normalizarKlines: ' + campo + ' invalido: ' + String(valor));
+    throw new Error(prefijo + ': ' + campo + ' invalido: ' + String(valor));
   }
   const numero = Number(valor);
   if (!Number.isSafeInteger(numero) || numero < 0) {
-    throw new Error('normalizarKlines: ' + campo + ' invalido: ' + String(valor));
+    throw new Error(prefijo + ': ' + campo + ' invalido: ' + String(valor));
   }
   return numero;
+}
+
+function texto(valor, campo, prefijo) {
+  if (typeof valor !== 'string' || valor.trim() === '') {
+    throw new Error(prefijo + ': ' + campo + ' invalido: ' + String(valor));
+  }
+  return valor;
 }
 
 export function normalizarKlines(velas, { exchange_id = 'binance', symbol, interval } = {}) {
@@ -56,4 +63,29 @@ export function normalizarKlines(velas, { exchange_id = 'binance', symbol, inter
     });
   }
   return out;
+}
+
+export function normalizarTicker(raw, { exchange_id = 'binance' } = {}) {
+  const prefijo = 'normalizarTicker';
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error(prefijo + ': ticker invalido');
+  }
+  const opcional = (campo, origen) => raw[origen] == null ? null : decimal(raw[origen], campo, prefijo);
+  return {
+    exchange_id: texto(exchange_id, 'exchange_id', prefijo),
+    symbol: texto(raw.symbol, 'symbol', prefijo),
+    timestamp: entero(raw.closeTime, 'timestamp', prefijo),
+    price: decimal(raw.lastPrice, 'price', prefijo),
+    open_24h: opcional('open_24h', 'openPrice'),
+    high_24h: opcional('high_24h', 'highPrice'),
+    low_24h: opcional('low_24h', 'lowPrice'),
+    volume_24h: opcional('volume_24h', 'volume'),
+    quote_volume_24h: opcional('quote_volume_24h', 'quoteVolume')
+  };
+}
+
+export function normalizarTickers(tickers, meta) {
+  if (Array.isArray(tickers)) return tickers.map(t => normalizarTicker(t, meta));
+  if (tickers && typeof tickers === 'object') return [normalizarTicker(tickers, meta)];
+  throw new Error('normalizarTicker: ticker invalido');
 }
