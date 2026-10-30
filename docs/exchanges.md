@@ -14,6 +14,8 @@ La API key no es necesaria para los endpoints publicos. Las velas se consultan e
 
 La consulta ya se probo con BTCUSDT y ETHUSDT desde Argentina. El endpoint Spot devuelve hasta 12 valores por vela, en un array posicional.
 
+Los precios de las ultimas 24 horas se consultan en `https://data-api.binance.vision/api/v3/ticker/24hr`. Para la watchlist se piden todos los simbolos en una sola consulta con el parametro `symbols=["BTCUSDT","ETHUSDT"]`; la respuesta trae `lastPrice`, `openPrice`, `highPrice`, `lowPrice`, `volume`, `quoteVolume` y `closeTime`, que normalizamos al contrato interno del ticker.
+
 ### Kraken Spot
 
 Los datos publicos no requieren cuenta ni API key. Las velas se consultan en `https://api.kraken.com/0/public/OHLC`; el WebSocket v2 `wss://ws.kraken.com/v2` tiene un canal publico `ohlc` que actualiza con cada operacion. Kraken recomienda no superar una consulta por segundo para los endpoints publicos OHLC y Trades; el limite se aplica por IP y par. La respuesta incluye hasta 720 velas y la ultima todavia esta abierta. Kraken usa `XBT` para Bitcoin y entrega el tiempo en segundos, por lo que hay que adaptar el simbolo y el timestamp. [REST OHLC](https://docs.kraken.com/api/docs/rest-api/get-ohlc-data) · [WebSocket OHLC](https://docs.kraken.com/api/docs/websocket-v2/ohlc) · [Limites](https://support.kraken.com/articles/206548367-what-are-the-api-rate-limits-)
