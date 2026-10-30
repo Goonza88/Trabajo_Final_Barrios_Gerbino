@@ -1,13 +1,9 @@
 // convierte arboles de widgets en lineas pintables - layout por bandas y render por diff
 
 import { escape, palette, toAnsi, textWidth, truncateTo } from './ansi.mjs';
+import { boxSize } from './layout.mjs';
 
-export const BORDERS = { // simbolos para rectangulo que una caja pide por nombre
-  round:  { tl: '╭', tr: '╮', bl: '╰', br: '╯', h: '─', v: '│' },
-  square: { tl: '┌', tr: '┐', bl: '└', br: '┘', h: '─', v: '│' },
-  thick:  { tl: '┏', tr: '┓', bl: '┗', br: '┛', h: '━', v: '┃' },
-  double: { tl: '╔', tr: '╗', bl: '╚', br: '╝', h: '═', v: '║' },
-};
+export { BORDERS } from './layout.mjs';
 
 // BANDAS ==========================================================================================
 
@@ -127,14 +123,6 @@ function applyBg(content, bg) {
   return bg + content.replaceAll(escape.reset, escape.reset + bg) + escape.reset;
 }
 
-// normaliza el padding a n | [v,h] | { top, right, bottom, left }
-function normalizePadding(pad) {
-  if (pad == null) return { top: 0, right: 0, bottom: 0, left: 0 };
-  if (typeof pad === 'number') return { top: pad, right: pad, bottom: pad, left: pad };
-  if (Array.isArray(pad)) return { top: pad[0] ?? 0, right: pad[1] ?? 0, bottom: pad[0] ?? 0, left: pad[1] ?? 0 };
-  return { top: pad.top ?? 0, right: pad.right ?? 0, bottom: pad.bottom ?? 0, left: pad.left ?? 0 };
-}
-
 // PINTADO =========================================================================================
 
 // pinta el texto aplicando estilo
@@ -145,17 +133,7 @@ function paintText(ctx, node, w) {
 
 // dibuja la caja - borde, padding, align y valign
 function paintBox(ctx, node, width) {
-  const borderSet = node.border === true ? BORDERS.round
-    : typeof node.border === 'string' ? (BORDERS[node.border] ?? BORDERS.round)
-    : (node.border && typeof node.border === 'object') ? node.border
-    : null;
-  const pad = normalizePadding(node.pad);
-  const outerW = Math.max(0, Math.min(node.width ?? width, width));
-  const frame = borderSet ? 2 : 0;
-  const innerW = Math.max(0, outerW - frame - pad.left - pad.right);
-  const innerH = node.height != null // sin height, la caja mide lo que mide el contenido
-    ? Math.max(0, node.height - frame - pad.top - pad.bottom)
-    : null;
+  const { border: borderSet, pad, outerW, innerW, innerH } = boxSize(node, width);
 
   let lines = flatten(node.child, innerW, innerH ?? Infinity);
   if (innerH != null) {

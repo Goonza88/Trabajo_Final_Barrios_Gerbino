@@ -19,6 +19,7 @@ Definimos la prioridad de la siguiente forma:
 | catalogo de exchanges y simbolos | `backend/datos` | mantiene `exchange`, `simbolo` y `simbolo_intervalo` |
 | repositorio de mercado | `backend/datos` | guarda y consulta las velas y los tickers en la base |
 | repositorio de usuario | `backend/datos` | guarda y consulta watchlist, alertas, operaciones, notas y configuracion |
+| casos de uso de mercado | `backend/dominio` | coordina la consulta y normalizacion de velas para la interfaz, sin calcular indicadores |
 | conexion REST de exchange | `backend/red` | consulta las velas y el ticker que dice la configuracion |
 | normalizador de respuestas | `backend/red` | lleva la respuesta de cada exchange al formato interno |
 | indicadores basicos | `backend/metricas` | media simple, media exponencial, RSI y volumen medio |

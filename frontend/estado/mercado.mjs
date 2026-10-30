@@ -1,7 +1,6 @@
-import { klines as pedirKlines } from '../../backend/red/binance.mjs';
-import { normalizarKlines } from '../../backend/red/normalizar.mjs';
+import { cargarVelas as pedirVelas } from '../../backend/dominio/mercado.mjs';
 
-export function crearEstado({ symbol = 'BTCUSDT', interval = '1m', limite = 200, klines = pedirKlines } = {}) {
+export function crearEstado({ symbol = 'BTCUSDT', interval = '1m', limite = 200, cargarVelas = pedirVelas } = {}) {
   const estado = {
     exchange_id: 'binance',
     symbol,
@@ -27,9 +26,14 @@ export function crearEstado({ symbol = 'BTCUSDT', interval = '1m', limite = 200,
 
   async function ejecutarCarga(control, id) {
     try {
-      const raw = await klines({ symbol: estado.symbol, interval: estado.interval, limit: estado.limite, signal: control.signal });
+      const norm = await cargarVelas({
+        exchange_id: estado.exchange_id,
+        symbol: estado.symbol,
+        interval: estado.interval,
+        limit: estado.limite,
+        signal: control.signal
+      });
       if (id !== carga || control.signal.aborted) return estado;
-      const norm = normalizarKlines(raw, { exchange_id: estado.exchange_id, symbol: estado.symbol, interval: estado.interval });
       estado.velas = norm.slice(-500);
       const last = estado.velas[estado.velas.length - 1];
       estado.ultimo = last ? last.close : null;

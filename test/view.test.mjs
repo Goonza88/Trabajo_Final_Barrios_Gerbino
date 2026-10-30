@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { flatten, diffLines, frameOutput } from '../backend/terminal/view.mjs';
+import { boxSize } from '../backend/terminal/layout.mjs';
 import { box, rows, text, gap, split, table, grid } from '../backend/terminal/widgets.mjs';
 import { textWidth, escape, sanitize } from '../backend/terminal/ansi.mjs';
 
@@ -13,6 +14,14 @@ test('box con borde redondo ocupa el ancho pedido', () => {
   assert.equal(lineas[1].content, '│ hola' + ' '.repeat(13) + '│');
   assert.equal(lineas[2].content, '╰' + '─'.repeat(18) + '╯');
   for (const line of lineas) assert.equal(line.width, 20);
+});
+
+test('boxSize descuenta borde y padding', () => {
+  const medidas = boxSize({ border: 'round', pad: [0, 1], height: 10 }, 20);
+  assert.equal(medidas.outerW, 20);
+  assert.equal(medidas.innerW, 16);
+  assert.equal(medidas.innerH, 8);
+  assert.equal(medidas.frame, 2);
 });
 
 test('alto limita lineas que salen', () => {

@@ -48,6 +48,8 @@ De esta forma, el dominio de la aplicacion nunca toca `view`, solo produce datos
 
 Los widgets son los componentes con los que se arma el arbol que describe view. Cada constructor devuelve un nodo que describe la pieza. Los widgets simples (`text`, `gap`, `table`, `bar` e `input`) describen elementos visuales, mientras que los complejos (`rows`, `cols`, `split` y `box`) componen y organizan a sus hijos.
 
+`grid` recibe `width`, `height` y `cells`: una matriz de celdas ya calculadas. Cada celda es `null` o `{ ch, style }`, `ch` ocupa una columna y `style` usa los roles de `ansi.mjs`. El substrato no conoce el origen de las celdas ni el dominio que las genero. No se usan caracteres anchos, cada celda es un caracter de una columna.
+
 Los nodos son informacion, no tienen imports ni logica, permitiendo que sean faciles de construir.
 
 ## runtime.mjs

@@ -1,6 +1,7 @@
 import { box, rows, text, table } from '../../backend/terminal/widgets.mjs';
 import { size } from '../../backend/terminal/runtime.mjs';
 import { sanitize } from '../../backend/terminal/ansi.mjs';
+import { boxSize } from '../../backend/terminal/layout.mjs';
 import { restar, formatear } from '../../backend/metricas/decimal.mjs';
 import { graficoVelas } from '../graficos/velas.mjs';
 
@@ -24,6 +25,8 @@ function fmtHora(ts) {
 export function vistaMercado(estado, modoTabla = false) {
   const { cols, rows: filasTerminal } = size();
   const h = filasTerminal;
+  const marco = { border: 'round', pad: [0, 1], height: h };
+  const { innerW, innerH } = boxSize(marco, cols);
   const error = estado.error ? sanitize(estado.error) : null;
   const total = estado.velas.length;
   const start = Math.max(0, total - estado.zoomX - estado.offset);
@@ -44,7 +47,7 @@ export function vistaMercado(estado, modoTabla = false) {
       { type: 'gap', h: 1 },
       table({ headers: ['hora', 'open', 'high', 'low', 'close', 'vol'], rows: filas, fill: true, align: 'center' }),
       error ? text('err: ' + error, { fg: 'danger' }) : null
-    ].filter(Boolean)), { border: 'round', pad: [0, 1], height: h });
+    ].filter(Boolean)), marco);
     return chart;
   }
 
@@ -53,14 +56,14 @@ export function vistaMercado(estado, modoTabla = false) {
     { type: 'gap', h: 1 },
     graficoVelas({
       velas: vis,
-      width: Math.max(1, cols - 4),
-      height: Math.max(2, filasTerminal - 5),
+      width: innerW,
+      height: Math.max(2, (innerH ?? h) - 3),
       showAxis: true,
       interval: estado.interval,
       zoomY: estado.zoomY,
       offsetY: estado.offsetY || 0
     })
-  ].concat(error ? [text('err: ' + error, { fg: 'danger' })] : [])), { border: 'round', pad: [0, 1], height: h });
+  ].concat(error ? [text('err: ' + error, { fg: 'danger' })] : [])), marco);
 
   return chart;
 }

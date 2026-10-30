@@ -11,7 +11,21 @@ function deferred() {
 }
 
 function vela(i, close = '100') {
-  return [i * 60000, '100', '101', '99', close, '1', i * 60000 + 59999, '1', 2];
+  return {
+    exchange_id: 'binance',
+    symbol: 'BTCUSDT',
+    interval: '1m',
+    open_time: i * 60000,
+    open: '100',
+    high: '101',
+    low: '99',
+    close,
+    volume: '1',
+    close_time: i * 60000 + 59999,
+    quote_volume: '1',
+    trades: 2,
+    ingested_at: i * 60000
+  };
 }
 
 test('una carga vieja no pisa a la nueva', async () => {
@@ -23,7 +37,7 @@ test('una carga vieja no pisa a la nueva', async () => {
     pendientes.push(d);
     return d.promise;
   };
-  const { estado, cargar } = crearEstado({ klines: fake });
+  const { estado, cargar } = crearEstado({ cargarVelas: fake });
 
   const primera = cargar();
   const segunda = cargar();
@@ -46,7 +60,7 @@ test('un error se muestra y la carga siguiente lo limpia', async () => {
     llamadas++;
     return llamadas === 1 ? Promise.reject(new Error('boom')) : Promise.resolve([vela(0)]);
   };
-  const { estado, cargar } = crearEstado({ klines: fake });
+  const { estado, cargar } = crearEstado({ cargarVelas: fake });
 
   await cargar();
   assert.equal(estado.error, 'boom');
@@ -58,7 +72,7 @@ test('un error se muestra y la carga siguiente lo limpia', async () => {
 
 test('cancelar descarta la respuesta pendiente', async () => {
   const pendiente = deferred();
-  const { estado, cargar, cancelar } = crearEstado({ klines: () => pendiente.promise });
+  const { estado, cargar, cancelar } = crearEstado({ cargarVelas: () => pendiente.promise });
 
   const carga = cargar();
   cancelar();
@@ -75,7 +89,7 @@ test('cambiar de intervalo recarga con el intervalo nuevo', async () => {
     llamadas.push(opciones);
     return Promise.resolve([vela(0)]);
   };
-  const { estado, setIntervalo } = crearEstado({ klines: fake });
+  const { estado, setIntervalo } = crearEstado({ cargarVelas: fake });
 
   await setIntervalo('5m');
   assert.equal(estado.interval, '5m');

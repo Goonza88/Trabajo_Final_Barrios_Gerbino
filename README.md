@@ -23,6 +23,7 @@ Trabajo_Final_Barrios_Gerbino/
 ├── backend/                      # la infraestructura y el procesamiento
 │   ├── datos/                    / persistencia sobre SQLite - conexion, migraciones y repositorios
 │   │   └── contrato/             / vocabularios, catalogo inicial y validaciones que importa sqlite
+│   ├── dominio/                  / usos que coordinan ingesta y persistencia
 │   ├── metricas/                 / indicadores y metricas de operaciones
 │   ├── red/                      / los conectores con los exchanges
 │   ├── terminal/                 / el sustrato de terminal
