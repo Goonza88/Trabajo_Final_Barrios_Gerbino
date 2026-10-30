@@ -1,12 +1,31 @@
-import { cargarVelas as pedirVelas } from '../../backend/dominio/mercado.mjs';
+import { cargarVelas as pedirVelas, cargarTickers as pedirTickers } from '../../backend/dominio/mercado.mjs';
 
-export function crearEstado({ symbol = 'BTCUSDT', interval = '1m', limite = 200, cargarVelas = pedirVelas } = {}) {
+export function crearEstado({
+  symbol = 'BTCUSDT',
+  simbolos = [symbol],
+  interval = '1m',
+  limite = 200,
+  cargarVelas = pedirVelas,
+  cargarTickers: cargarTickersFn = pedirTickers
+} = {}) {
+  const filtrados = Array.isArray(simbolos)
+    ? [...new Set(simbolos.filter(s => typeof s === 'string' && s.trim() !== '').map(s => s.trim()))]
+    : [];
+  const lista = filtrados.length ? filtrados : [symbol];
+  const inicial = lista.includes(symbol) ? symbol : lista[0];
+
   const estado = {
     exchange_id: 'binance',
-    symbol,
+    symbol: inicial,
+    simbolos: lista,
     interval,
     limite,
     velas: [],
+    tickers: {},
+    tickers_error: null,
+    tickers_actualizado_en: null,
+    cursor: Math.max(0, lista.indexOf(inicial)),
+    foco: 'grafico',
     error: null,
     ultimo: null,
     actualizado_en: null,
@@ -23,6 +42,9 @@ export function crearEstado({ symbol = 'BTCUSDT', interval = '1m', limite = 200,
   let carga = 0;
   let abortar = null;
   let enCurso = null;
+  let cargaTickers = 0;
+  let abortarTickers = null;
+  let enCursoTickers = null;
 
   async function ejecutarCarga(control, id) {
     try {
@@ -62,11 +84,53 @@ export function crearEstado({ symbol = 'BTCUSDT', interval = '1m', limite = 200,
     return promesa;
   }
 
+  async function ejecutarCargaTickers(control, id) {
+    try {
+      const norm = await cargarTickersFn({
+        exchange_id: estado.exchange_id,
+        symbols: estado.simbolos,
+        signal: control.signal
+      });
+      if (id !== cargaTickers || control.signal.aborted) return estado;
+      const mapa = {};
+      for (const ticker of norm || []) {
+        if (ticker && estado.simbolos.includes(ticker.symbol)) mapa[ticker.symbol] = ticker;
+      }
+      estado.tickers = mapa;
+      estado.tickers_error = null;
+      estado.tickers_actualizado_en = Date.now();
+      return estado;
+    } catch (e) {
+      if (id === cargaTickers && !control.signal.aborted) estado.tickers_error = e.message;
+      return estado;
+    } finally {
+      if (abortarTickers === control) abortarTickers = null;
+    }
+  }
+
+  function cargarTickers({ reemplazar = true } = {}) {
+    if (!reemplazar && enCursoTickers) return enCursoTickers;
+    abortarTickers?.abort();
+    const control = new AbortController();
+    abortarTickers = control;
+    const id = ++cargaTickers;
+    const promesa = ejecutarCargaTickers(control, id);
+    enCursoTickers = promesa;
+    promesa.finally(() => {
+      if (enCursoTickers === promesa) enCursoTickers = null;
+    });
+    return promesa;
+  }
+
   function cancelar() {
     carga++;
     abortar?.abort();
     abortar = null;
     enCurso = null;
+    cargaTickers++;
+    abortarTickers?.abort();
+    abortarTickers = null;
+    enCursoTickers = null;
   }
 
   async function setIntervalo(i) {
@@ -76,6 +140,40 @@ export function crearEstado({ symbol = 'BTCUSDT', interval = '1m', limite = 200,
     estado.offset = 0;
     estado.offsetY = 0;
     await cargar();
+  }
+
+  function moverCursor(delta) {
+    if (!estado.simbolos.length) return;
+    estado.cursor = Math.max(0, Math.min(estado.simbolos.length - 1, estado.cursor + delta));
+  }
+
+  async function seleccionar(symbol) {
+    if (!estado.simbolos.includes(symbol)) return estado;
+    const cambio = estado.symbol !== symbol;
+    estado.symbol = symbol;
+    estado.cursor = estado.simbolos.indexOf(symbol);
+    if (cambio) {
+      estado.velas = [];
+      estado.ultimo = null;
+      estado.actualizado_en = null;
+      estado.error = null;
+      estado.offset = 0;
+      estado.offsetY = 0;
+    }
+    return cargar();
+  }
+
+  function seleccionarCursor() {
+    const symbol = estado.simbolos[estado.cursor];
+    return symbol ? seleccionar(symbol) : Promise.resolve(estado);
+  }
+
+  function setFoco(foco) {
+    if (foco === 'watchlist' || foco === 'grafico') estado.foco = foco;
+  }
+
+  function alternarFoco() {
+    estado.foco = estado.foco === 'watchlist' ? 'grafico' : 'watchlist';
   }
 
   function zoomH(dir) {
@@ -107,5 +205,19 @@ export function crearEstado({ symbol = 'BTCUSDT', interval = '1m', limite = 200,
     if (dir === 'k') estado.offsetY = estado.offsetY - 0.0005;
   }
 
-  return { estado, cargar, setIntervalo, zoomH, zoomV, mover, cancelar };
+  return {
+    estado,
+    cargar,
+    cargarTickers,
+    setIntervalo,
+    moverCursor,
+    seleccionar,
+    seleccionarCursor,
+    setFoco,
+    alternarFoco,
+    zoomH,
+    zoomV,
+    mover,
+    cancelar
+  };
 }

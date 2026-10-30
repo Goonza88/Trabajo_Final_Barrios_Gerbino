@@ -25,7 +25,7 @@ const home = {
       text(`terminal ${cols}x${filas}`, { fg: 'muted' }),
       text(`iniciado ${model.inicio.toLocaleTimeString('es-AR')}`, { fg: 'muted' }),
       gap(),
-      text('m mercado', { fg: 'sec' }),
+      text('m monitor', { fg: 'sec' }),
       text('d demos', { fg: 'sec' }),
       text('q salir', { fg: 'sec' }),
     ]), { border: 'round', height: filas, pad: [0, 1] });
@@ -59,11 +59,26 @@ function alTerminarCarga(promesa) {
 }
 
 function mercadoApp() {
-  const { estado, cargar, setIntervalo, zoomH, zoomV, mover, cancelar } = crearEstado({ symbol: 'BTCUSDT', interval: '1m', limite: 200 });
+  const simbolos = ['BTCUSDT', 'ETHUSDT'];
+  const {
+    estado,
+    cargar,
+    cargarTickers,
+    setIntervalo,
+    moverCursor,
+    seleccionarCursor,
+    setFoco,
+    alternarFoco,
+    zoomH,
+    zoomV,
+    mover,
+    cancelar
+  } = crearEstado({ symbol: 'BTCUSDT', simbolos, interval: '1m', limite: 200 });
+
   return {
     init: async () => {
       modoTabla = false;
-      await cargar();
+      await Promise.all([cargar(), cargarTickers()]);
       return estado;
     },
     subscriptions: [Sub.interval(5000, 'poll')],
@@ -74,6 +89,17 @@ function mercadoApp() {
           stop();
           run(home);
           return model;
+        }
+        if (event.key === 'Tab') {
+          alternarFoco();
+          return estado;
+        }
+        if (event.key === 'Enter') {
+          if (estado.foco === 'watchlist') {
+            setFoco('grafico');
+            alTerminarCarga(seleccionarCursor());
+          }
+          return estado;
         }
         if (event.key === 't') {
           modoTabla = !modoTabla;
@@ -104,10 +130,15 @@ function mercadoApp() {
         if (event.key === 'd') { alTerminarCarga(setIntervalo('1h')); return estado; }
         if (event.key === 'f') { alTerminarCarga(setIntervalo('4h')); return estado; }
         if (event.key === 'g') { alTerminarCarga(setIntervalo('1d')); return estado; }
-        if (event.key === 'h') { mover('h'); return estado; }
-        if (event.key === 'j') { mover('j'); return estado; }
-        if (event.key === 'k') { mover('k'); return estado; }
-        if (event.key === 'l') { mover('l'); return estado; }
+        if (estado.foco === 'watchlist') {
+          if (event.key === 'j' || event.key === 'ArrowDown') { moverCursor(1); return estado; }
+          if (event.key === 'k' || event.key === 'ArrowUp') { moverCursor(-1); return estado; }
+          return estado;
+        }
+        if (event.key === 'h' || event.key === 'ArrowLeft') { mover('h'); return estado; }
+        if (event.key === 'j' || event.key === 'ArrowDown') { mover('j'); return estado; }
+        if (event.key === 'k' || event.key === 'ArrowUp') { mover('k'); return estado; }
+        if (event.key === 'l' || event.key === 'ArrowRight') { mover('l'); return estado; }
         if (event.key === 'y') { zoomH('-'); return estado; }
         if (event.key === 'o') { zoomH('+'); return estado; }
         if (event.key === 'u') { zoomV('-'); return estado; }
@@ -115,6 +146,7 @@ function mercadoApp() {
       }
       if (event.type === 'sub:tick' && event.tag === 'poll') {
         alTerminarCarga(cargar({ reemplazar: false }));
+        alTerminarCarga(cargarTickers({ reemplazar: false }));
         return estado;
       }
       return model;

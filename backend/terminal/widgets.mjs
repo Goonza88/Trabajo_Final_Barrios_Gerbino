@@ -53,7 +53,7 @@ export function box(child, opts = {}) {
   };
 }
 
-// tabla simple: cabeceras, filas y una fila seleccionada (cursor)
+// tabla simple: cabeceras, filas (texto o { text, style }) y una fila seleccionada (cursor)
 export function table(opts) {
   return {
     type: 'table',

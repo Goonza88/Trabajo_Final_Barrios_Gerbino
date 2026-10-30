@@ -199,6 +199,14 @@ function paintCols(ctx, node, width) {
   }
 }
 
+// normaliza una celda de tabla - acepta texto simple o { text, style }
+function tableCell(cell) {
+  if (cell && typeof cell === 'object' && !Array.isArray(cell)) {
+    return { text: String(cell.text ?? ''), style: cell.style || '' };
+  }
+  return { text: String(cell ?? ''), style: '' };
+}
+
 // pinta header y filas, resalta la fila seleccionada
 function paintTable(ctx, node, width) {
   const rowsArr = node.rows || [];
@@ -207,12 +215,12 @@ function paintTable(ctx, node, width) {
   if (!colCount) return;
   const colWidths = Array.from({ length: colCount }, () => 0); // ancho = maximo contenido que tiene
   if (headers.length) {
-    for (let col = 0; col < colCount; col++) colWidths[col] = textWidth(String(headers[col] ?? ''));
+    for (let col = 0; col < colCount; col++) colWidths[col] = textWidth(tableCell(headers[col]).text);
   }
   for (const row of rowsArr) {
     for (let col = 0; col < colCount; col++) {
       const cell = row && col < row.length ? row[col] : null;
-      colWidths[col] = Math.max(colWidths[col], textWidth(String(cell ?? '')));
+      colWidths[col] = Math.max(colWidths[col], textWidth(tableCell(cell).text));
     }
   }
   const gapW = 1;
@@ -227,19 +235,28 @@ function paintTable(ctx, node, width) {
     }
   }
   const align = node.align || 'left';
-  const render = (cell, col) => {
-    const text = String(cell ?? '');
-    return padAlign(text, textWidth(text), colWidths[col], align);
+  const render = (cell, col, bg = '') => {
+    const info = tableCell(cell);
+    const padded = padAlign(info.text, textWidth(info.text), colWidths[col], align);
+    let style = info.style;
+    if (bg) {
+      if (style && typeof style === 'object') style = { ...style, bg };
+      else if (!style) style = { bg };
+      else style = toAnsi({ bg }) + style;
+    }
+    const prefix = toAnsi(style);
+    return prefix + padded + (prefix ? escape.reset : '');
   };
   const header = headers.length
     ? Array.from({ length: colCount }, (_, col) => render(headers[col], col)).join(' '.repeat(gapW))
     : '';
   if (header) pushStyled(ctx, header, palette.muted, width);
   for (let row = 0; row < rowsArr.length; row++) {
-    const cells = Array.from({ length: colCount }, (_, col) => render(rowsArr[row]?.[col], col)).join(' '.repeat(gapW));
     const isSelected = node.cursor != null && row === node.cursor;
-    const line = isSelected ? applyBg(cells, toAnsi({ bg: 'selected' })) : cells;
-    ctx.out.push({ content: truncateTo(line, width), width: Math.min(textWidth(cells), width) });
+    const bg = isSelected ? 'selected' : '';
+    const gap = bg ? toAnsi({ bg }) + ' '.repeat(gapW) + escape.reset : ' '.repeat(gapW);
+    const cells = Array.from({ length: colCount }, (_, col) => render(rowsArr[row]?.[col], col, bg)).join(gap);
+    ctx.out.push({ content: truncateTo(cells, width), width: Math.min(textWidth(cells), width) });
   }
 }
 
