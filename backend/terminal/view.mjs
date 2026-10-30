@@ -76,11 +76,11 @@ const WIDGETS = {
   candlechart: paintCandlechart,
 };
 
-// bloques de 1/8 (solo para puntas que caen dentro del cuerpo: ahí el bloque
-// es continuo y no genera una mecha entre dos cuerpos).
+
+// bloques por octavos para puntas de cuerpos de velas
 const BLOCK8 = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
-// medias líneas verticales finas: conservan el ancho de la mecha y dan
-// precisión de media celda en las puntas.
+
+// lineas verticales cortadas para las mechas
 const HALF_UP = '╵';
 const HALF_DOWN = '╷';
 
@@ -217,9 +217,7 @@ function paintCandlechart(ctx, node, width) {
     for (const r of bodyRows) {
       if (grid[r]) grid[r][col] = { ch: '█', color };
     }
-    // puntas: en una celda de cuerpo el bloque de 1/8 queda continuo con el
-    // cuerpo y no genera artefacto; en una celda de mecha se usa una media
-    // línea fina para no convertirla en una celda ancha tipo cuerpo.
+    // puntas por octavos, mechas por mitades
     if (wickRows.length > 1) {
       const top = wickRows[0];
       if (pH > -0.5 && pH < h - 0.5) {

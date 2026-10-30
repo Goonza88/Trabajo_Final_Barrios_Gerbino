@@ -63,10 +63,7 @@ export const palette = {
   success: escape.fg(0x6f, 0xac, 0x67),
 };
 
-// paleta de colores crudos (rgb por rol) para poder variarlos
-// selected es un rol de fondo (fila seleccionada), solo se usa via toAnsi({ bg: 'selected' })
-// el substrato no define identidad visual: estos defaults son neutros y pueden
-// reemplazarse con setPalette desde una capa superior, antes de llamar a run()
+// paleta de colores raw, defaults neutros - selected es el fondo - reemplazables con setPalette
 const raw = {
   text:     [0xaa, 0xab, 0xac],
   accent:   [0x98, 0x6c, 0x98],
@@ -78,8 +75,7 @@ const raw = {
   selected: [0x25, 0x27, 0x27],
 };
 
-// reemplaza colores de la paleta por rol - un rol desconocido lanza, para cazar typos
-// los roles que no vienen en el parcial conservan el color que tenian
+// reemplaza colores de la paleta por rol - rol desconocido lanza, el resto conserva color
 export function setPalette(parcial) {
   for (const [rol, valor] of Object.entries(parcial)) {
     if (!Object.hasOwn(raw, rol)) throw new Error(`ansi.setPalette: rol desconocido: ${rol}`);
