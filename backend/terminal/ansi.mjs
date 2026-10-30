@@ -45,6 +45,7 @@ export function toAnsi(style) {
   if (style.dim) out += '\x1b[2m';
   if (style.italic) out += '\x1b[3m';
   if (style.underline) out += '\x1b[4m';
+  if (style.reverse) out += '\x1b[7m';
   return out;
 }
 

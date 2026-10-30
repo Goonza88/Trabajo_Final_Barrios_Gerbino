@@ -3,8 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { flatten, diffLines, frameOutput } from '../backend/terminal/view.mjs';
-import { box, rows, text, gap, split, table, candlechart } from '../backend/terminal/widgets.mjs';
-import { textWidth, escape } from '../backend/terminal/ansi.mjs';
+import { box, rows, text, gap, split, table, grid } from '../backend/terminal/widgets.mjs';
+import { textWidth, escape, sanitize } from '../backend/terminal/ansi.mjs';
 
 test('box con borde redondo ocupa el ancho pedido', () => {
   const lineas = flatten(box(rows([text('hola')]), { border: 'round', pad: [0, 1] }), 20);
@@ -89,30 +89,25 @@ test('table no pierde columnas de filas mas largas', () => {
   assert.ok(lineas.every(l => l.width <= 20));
 });
 
-test('candlechart no muta el nodo y respeta el ancho', () => {
-  const candles = Array.from({ length: 12 }, (_, i) => ({
-    open_time: i * 60000,
-    open: String(100 + i),
-    high: String(101 + i),
-    low: String(99 + i),
-    close: String(100 + i),
-    volume: '1',
-  }));
-  const node = candlechart({ candles, height: 10, showAxis: true, interval: '1m' });
-  const lineas = flatten(node, 40);
-  assert.equal(lineas.length, 11); // 10 del grafico + eje de tiempo
-  assert.ok(lineas.every(l => l.width <= 40));
+test('grid pinta celdas con roles y respeta ancho y alto', () => {
+  const node = grid({
+    width: 4,
+    height: 2,
+    cells: [
+      [{ ch: 'a', style: { fg: 'success' } }, { ch: 'b' }, null, { ch: 'c', style: { fg: 'danger' } }],
+      [],
+    ],
+  });
+  const lineas = flatten(node, 10);
+  assert.equal(lineas.length, 2);
+  assert.equal(lineas[0].width, 4);
+  assert.equal(sanitize(lineas[0].content), 'ab c');
+  assert.equal(sanitize(lineas[1].content), '    ');
+  assert.ok(lineas[0].content.includes(escape.reset));
   assert.equal(node._xlabels, undefined);
 });
 
-test('candlechart con rango plano no rompe', () => {
-  const candles = Array.from({ length: 8 }, (_, i) => ({
-    open_time: i * 60000,
-    open: '100',
-    high: '100',
-    low: '100',
-    close: '100',
-    volume: '1',
-  }));
-  assert.doesNotThrow(() => flatten(candlechart({ candles, height: 8 }), 30));
+test('grid rellena filas y columnas faltantes', () => {
+  const lineas = flatten(grid({ width: 3, height: 2, cells: [[{ ch: 'x' }]] }), 10);
+  assert.deepEqual(lineas.map(l => sanitize(l.content)), ['x  ', '   ']);
 });

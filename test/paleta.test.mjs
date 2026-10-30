@@ -39,6 +39,10 @@ test('toAnsi ignora roles y colores desconocidos sin romper', () => {
   assert.equal(toAnsi({ fg: 'toString' }), '');
 });
 
+test('toAnsi aplica reverse para bloques invertidos', () => {
+  assert.ok(toAnsi({ fg: 'success', reverse: true }).endsWith('\x1b[7m'));
+});
+
 test('sanitize limpia controles y escapes externos', () => {
   assert.equal(sanitize('a\r\x1b[31mb\tc'), 'ab  c');
 });

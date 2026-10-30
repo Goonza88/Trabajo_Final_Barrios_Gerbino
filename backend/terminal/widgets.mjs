@@ -89,16 +89,12 @@ export function input(opts = {}) {
   };
 }
 
-// grafico de velas simple
-export function candlechart(opts = {}) {
+// matriz de celdas ya calculadas - el terminal solo la pinta
+export function grid(opts = {}) {
   return {
-    type: 'candlechart',
-    candles: opts.candles || [],
-    height: opts.height ?? 12,
+    type: 'grid',
     width: opts.width ?? null,
-    showAxis: opts.showAxis ?? true,
-    interval: opts.interval ?? '1m',
-    zoomY: opts.zoomY ?? 1.0,
-    offsetY: opts.offsetY ?? 0
+    height: opts.height ?? null,
+    cells: opts.cells || []
   };
 }
