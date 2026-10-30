@@ -131,9 +131,35 @@ test('run con una app corriendo tira error', () => {
   } finally { stop(); s.restaurar(); }
 });
 
-test('subscription desconocida tira error', () => {
+test('subscription desconocida tira error y no traba el runtime', async () => {
   const s = espiar();
   try {
     assert.throws(() => run({ subscriptions: [{ type: 'bogus' }] }), /subscription desconocida/);
+    const eventos = [];
+    run(app(eventos));
+    await sleep(30);
+    assert.ok(s.escritos.length > 0, 'la app arranco despues del error');
+    stop();
+  } finally { stop(); s.restaurar(); }
+});
+
+test('subscription invalida no deja timers vivos', async () => {
+  const s = espiar();
+  try {
+    const eventos = [];
+    assert.throws(() => run(app(eventos, {
+      subscriptions: [Sub.interval(10, 'viejo'), { type: 'bogus' }],
+    })), /subscription desconocida/);
+    await sleep(40);
+    assert.equal(eventos.filter(e => e.type === 'sub:tick').length, 0);
+    run(app([]));
+    stop();
+  } finally { stop(); s.restaurar(); }
+});
+
+test('subscription sin ms valido tira error', () => {
+  const s = espiar();
+  try {
+    assert.throws(() => run({ subscriptions: [Sub.interval(NaN)] }), /sin ms valido/);
   } finally { stop(); s.restaurar(); }
 });

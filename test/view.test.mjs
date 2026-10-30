@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { flatten, diffLines, frameOutput } from '../backend/terminal/view.mjs';
-import { box, rows, text, gap, split } from '../backend/terminal/widgets.mjs';
+import { box, rows, text, gap, split, table, candlechart } from '../backend/terminal/widgets.mjs';
 import { textWidth, escape } from '../backend/terminal/ansi.mjs';
 
 test('box con borde redondo ocupa el ancho pedido', () => {
@@ -66,4 +66,53 @@ test('diffLines marca solo las lineas que cambiaron', () => {
 test('frameOutput vuelve a pintar con goto y borra hasta fin de linea', () => {
   const out = frameOutput([1], [{ content: 'x' }, { content: 'y' }]);
   assert.equal(out, escape.goto(2, 1) + escape.eraseRight + 'y' + escape.reset);
+});
+
+test('table mide todas las columnas y llena el ancho', () => {
+  const lineas = flatten(table({
+    headers: ['a', 'bb'],
+    rows: [['x', 'y'], ['z', 'w']],
+    fill: true,
+    align: 'center',
+  }), 20);
+  assert.equal(lineas.length, 3);
+  for (const line of lineas) assert.equal(textWidth(line.content), 20);
+  assert.match(lineas[0].content, /a/);
+  assert.match(lineas[0].content, /bb/);
+  assert.match(lineas[1].content, /x/);
+  assert.match(lineas[1].content, /y/);
+});
+
+test('table no pierde columnas de filas mas largas', () => {
+  const lineas = flatten(table({ rows: [['x'], ['y', 'z']] }), 20);
+  assert.deepEqual(lineas.map(l => l.content.trim()), ['x', 'y z']);
+  assert.ok(lineas.every(l => l.width <= 20));
+});
+
+test('candlechart no muta el nodo y respeta el ancho', () => {
+  const candles = Array.from({ length: 12 }, (_, i) => ({
+    open_time: i * 60000,
+    open: String(100 + i),
+    high: String(101 + i),
+    low: String(99 + i),
+    close: String(100 + i),
+    volume: '1',
+  }));
+  const node = candlechart({ candles, height: 10, showAxis: true, interval: '1m' });
+  const lineas = flatten(node, 40);
+  assert.equal(lineas.length, 11); // 10 del grafico + eje de tiempo
+  assert.ok(lineas.every(l => l.width <= 40));
+  assert.equal(node._xlabels, undefined);
+});
+
+test('candlechart con rango plano no rompe', () => {
+  const candles = Array.from({ length: 8 }, (_, i) => ({
+    open_time: i * 60000,
+    open: '100',
+    high: '100',
+    low: '100',
+    close: '100',
+    volume: '1',
+  }));
+  assert.doesNotThrow(() => flatten(candlechart({ candles, height: 8 }), 30));
 });

@@ -45,6 +45,19 @@ test('utf8Pending cuenta bytes que faltan para el char', () => {
   assert.equal(utf8Pending(Buffer.from('ñ')), 0);                               // caracter completo
 });
 
+test('Alt + caracter UTF-8 conserva el caracter', () => {
+  const d = new Dispatcher();
+  assert.deepEqual(chunk(d, '\x1bñ').map(e => e.key), ['Alt+ñ']);
+  d.destroy();
+});
+
+test('Alt + caracter UTF-8 partido en dos chunks conserva el caracter', () => {
+  const d = new Dispatcher();
+  assert.deepEqual(chunk(d, Buffer.from([0x1b, 0xc3])), []);
+  assert.deepEqual(chunk(d, Buffer.from([0xb1])).map(e => e.key), ['Alt+ñ']);
+  d.destroy();
+});
+
 test('timer de 30ms en Esc suelto', async () => {
   const d = new Dispatcher();
   const eventos = [];
@@ -80,4 +93,5 @@ test('editText agrega, borra y deja pasar lo que no edita', () => {
   assert.deepEqual(editText('añ', 'Backspace'), { value: 'a', handled: true });   // borra por code point
   assert.deepEqual(editText('abc', 'ArrowUp'), { value: 'abc', handled: false });
   assert.deepEqual(editText('abc', 'Enter'), { value: 'abc', handled: false });
+  assert.deepEqual(editText('', '😀'), { value: '', handled: false }); // sin emojis
 });

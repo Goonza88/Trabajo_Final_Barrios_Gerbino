@@ -2,7 +2,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { setPalette, palette, toAnsi, escape } from '../backend/terminal/ansi.mjs';
+import { setPalette, palette, toAnsi, escape, sanitize } from '../backend/terminal/ansi.mjs';
 
 test('rol con typo tira error', () => {
   assert.throws(() => setPalette({ acento: '#BCF734' }), /rol desconocido: acento/);
@@ -30,6 +30,17 @@ test('colores invalidos tiran error', () => {
   assert.throws(() => setPalette({ danger: 'rojo' }), /color invalido/);
   assert.throws(() => setPalette({ danger: [1, 2] }), /color invalido/);          // no son 3
   assert.throws(() => setPalette({ danger: [0, 300, 0] }), /color invalido/);     // fuera de rango
+  assert.throws(() => setPalette({ danger: '#zzzzzz' }), /color invalido/);       // hex invalido
+  assert.throws(() => setPalette({ danger: '#fff' }), /color invalido/);          // hex corto
+});
+
+test('toAnsi ignora roles y colores desconocidos sin romper', () => {
+  assert.equal(toAnsi({ fg: '#zzzzzz' }), '');
+  assert.equal(toAnsi({ fg: 'toString' }), '');
+});
+
+test('sanitize limpia controles y escapes externos', () => {
+  assert.equal(sanitize('a\r\x1b[31mb\tc'), 'ab  c');
 });
 
 test('selected es rol de fondo: existe en setPalette pero no en palette', () => {
