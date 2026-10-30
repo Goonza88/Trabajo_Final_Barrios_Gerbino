@@ -23,12 +23,9 @@ export function crearEstado({ symbol = 'BTCUSDT', interval = '1m', limite = 200,
 
   let carga = 0;
   let abortar = null;
+  let enCurso = null;
 
-  async function cargar() {
-    abortar?.abort();
-    const control = new AbortController();
-    abortar = control;
-    const id = ++carga;
+  async function ejecutarCarga(control, id) {
     try {
       const raw = await klines({ symbol: estado.symbol, interval: estado.interval, limit: estado.limite, signal: control.signal });
       if (id !== carga || control.signal.aborted) return estado;
@@ -47,10 +44,25 @@ export function crearEstado({ symbol = 'BTCUSDT', interval = '1m', limite = 200,
     }
   }
 
+  function cargar({ reemplazar = true } = {}) {
+    if (!reemplazar && enCurso) return enCurso;
+    abortar?.abort();
+    const control = new AbortController();
+    abortar = control;
+    const id = ++carga;
+    const promesa = ejecutarCarga(control, id);
+    enCurso = promesa;
+    promesa.finally(() => {
+      if (enCurso === promesa) enCurso = null;
+    });
+    return promesa;
+  }
+
   function cancelar() {
     carga++;
     abortar?.abort();
     abortar = null;
+    enCurso = null;
   }
 
   async function setIntervalo(i) {

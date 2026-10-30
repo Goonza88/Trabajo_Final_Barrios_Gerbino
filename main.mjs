@@ -2,7 +2,7 @@
 // con "d" se ejecuta el menu de demos - la primera vista real la arma frontend/vistas
 
 import { spawn } from 'node:child_process';
-import { run, stop, size, quit, Sub } from './backend/terminal/runtime.mjs';
+import { run, stop, size, quit, Sub, invalidate } from './backend/terminal/runtime.mjs';
 import { setPalette } from './backend/terminal/ansi.mjs';
 import { PALETA } from './frontend/paleta.mjs';
 import { box, rows, text, gap } from './backend/terminal/widgets.mjs';
@@ -54,6 +54,10 @@ const home = {
 
 let modoTabla = false;
 
+function alTerminarCarga(promesa) {
+  promesa.then(() => invalidate());
+}
+
 function mercadoApp() {
   const { estado, cargar, setIntervalo, zoomH, zoomV, mover, cancelar } = crearEstado({ symbol: 'BTCUSDT', interval: '1m', limite: 200 });
   return {
@@ -95,11 +99,11 @@ function mercadoApp() {
           }
           return estado;
         }
-        if (event.key === 'a') { await setIntervalo('1m'); return estado; }
-        if (event.key === 's') { await setIntervalo('5m'); return estado; }
-        if (event.key === 'd') { await setIntervalo('1h'); return estado; }
-        if (event.key === 'f') { await setIntervalo('4h'); return estado; }
-        if (event.key === 'g') { await setIntervalo('1d'); return estado; }
+        if (event.key === 'a') { alTerminarCarga(setIntervalo('1m')); return estado; }
+        if (event.key === 's') { alTerminarCarga(setIntervalo('5m')); return estado; }
+        if (event.key === 'd') { alTerminarCarga(setIntervalo('1h')); return estado; }
+        if (event.key === 'f') { alTerminarCarga(setIntervalo('4h')); return estado; }
+        if (event.key === 'g') { alTerminarCarga(setIntervalo('1d')); return estado; }
         if (event.key === 'h') { mover('h'); return estado; }
         if (event.key === 'j') { mover('j'); return estado; }
         if (event.key === 'k') { mover('k'); return estado; }
@@ -110,7 +114,7 @@ function mercadoApp() {
         if (event.key === 'i') { zoomV('+'); return estado; }
       }
       if (event.type === 'sub:tick' && event.tag === 'poll') {
-        await cargar();
+        alTerminarCarga(cargar({ reemplazar: false }));
         return estado;
       }
       return model;

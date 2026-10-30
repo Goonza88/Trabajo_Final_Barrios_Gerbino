@@ -33,6 +33,10 @@ export function size() { // tamaño de la terminal para que las apps no usen el 
   return { cols: process.stdout.columns || 80, rows: process.stdout.rows || 24 };
 }
 
+export function invalidate() { // pide repintar desde una carga async, sin bloquear la queue
+  requestFrame();
+}
+
 // ejecuta la app - prende subscriptions, toma terminal y pide el primer frame
 // init devuelve el modelo inicial - update(model, event) el nuevo - view(model) el arbol
 export function run(desc) {
