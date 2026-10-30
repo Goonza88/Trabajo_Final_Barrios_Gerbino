@@ -55,7 +55,7 @@ const home = {
 let modoTabla = false;
 
 function mercadoApp() {
-  const { estado, cargar, setIntervalo, zoomH, zoomV, mover } = crearEstado({ symbol: 'BTCUSDT', interval: '1m', limite: 200 });
+  const { estado, cargar, setIntervalo, zoomH, zoomV, mover, cancelar } = crearEstado({ symbol: 'BTCUSDT', interval: '1m', limite: 200 });
   return {
     init: async () => {
       modoTabla = false;
@@ -66,6 +66,7 @@ function mercadoApp() {
     update: async (model, event) => {
       if (event.type === 'key') {
         if (event.key === 'q') {
+          cancelar();
           stop();
           run(home);
           return model;
@@ -109,7 +110,7 @@ function mercadoApp() {
         if (event.key === 'i') { zoomV('+'); return estado; }
       }
       if (event.type === 'sub:tick' && event.tag === 'poll') {
-        cargar();
+        await cargar();
         return estado;
       }
       return model;

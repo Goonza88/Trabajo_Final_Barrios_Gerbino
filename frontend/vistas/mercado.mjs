@@ -1,5 +1,6 @@
 import { box, rows, text, table, candlechart } from '../../backend/terminal/widgets.mjs';
 import { size } from '../../backend/terminal/runtime.mjs';
+import { sanitize } from '../../backend/terminal/ansi.mjs';
 import { restar, formatear } from '../../backend/metricas/decimal.mjs';
 
 function cambio(velas) {
@@ -21,6 +22,7 @@ function fmtHora(ts) {
 
 export function vistaMercado(estado, modoTabla = false) {
   const h = size().rows;
+  const error = estado.error ? sanitize(estado.error) : null;
   const total = estado.velas.length;
   const start = Math.max(0, total - estado.zoomX - estado.offset);
   const end = Math.max(start, total - estado.offset);
@@ -39,7 +41,7 @@ export function vistaMercado(estado, modoTabla = false) {
       text(estado.symbol + ' ' + estado.interval + ' @ binance | ultimo:' + (estado.ultimo ?? '-') + ' | delta:' + (cambio(estado.velas) ?? '-') + ' | act:' + fmtHora(estado.actualizado_en) + ' | a:1m s:5m d:1h f:4h g:1d  t:grafico h/j/k/l:pan y/o:tiempo u/i:precio p:prec' + (estado.precision ? '(on)' : '(off)') + ' q', { fg: 'accent' }),
       { type: 'gap', h: 1 },
       table({ headers: ['hora', 'open', 'high', 'low', 'close', 'vol'], rows: filas, fill: true, align: 'center' }),
-      estado.error ? text('err: ' + estado.error, { fg: 'danger' }) : null
+      error ? text('err: ' + error, { fg: 'danger' }) : null
     ].filter(Boolean)), { border: 'round', pad: [0, 1], height: h });
     return chart;
   }
@@ -48,7 +50,7 @@ export function vistaMercado(estado, modoTabla = false) {
     text(estado.symbol + ' ' + estado.interval + ' @ binance | ultimo:' + (estado.ultimo ?? '-') + ' | delta:' + (cambio(estado.velas) ?? '-') + ' | act:' + fmtHora(estado.actualizado_en) + ' | a:1m s:5m d:1h f:4h g:1d  t:tabla h/j/k/l:pan y/o:tiempo u/i:precio p:prec' + (estado.precision ? '(on)' : '(off)') + ' q', { fg: 'accent' }),
     { type: 'gap', h: 1 },
     candlechart({ candles: vis, height: h - 6, showAxis: true, interval: estado.interval, zoomY: estado.zoomY, offsetY: estado.offsetY || 0 })
-  ].concat(estado.error ? [text('err: ' + estado.error, { fg: 'danger' })] : [])), { border: 'round', pad: [0, 1], height: h });
+  ].concat(error ? [text('err: ' + error, { fg: 'danger' })] : [])), { border: 'round', pad: [0, 1], height: h });
 
   return chart;
 }

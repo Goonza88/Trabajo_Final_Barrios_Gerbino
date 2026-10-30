@@ -1,7 +1,7 @@
-import { klines } from '../../backend/red/binance.mjs';
+import { klines as pedirKlines } from '../../backend/red/binance.mjs';
 import { normalizarKlines } from '../../backend/red/normalizar.mjs';
 
-export function crearEstado({ symbol = 'BTCUSDT', interval = '1m', limite = 200 } = {}) {
+export function crearEstado({ symbol = 'BTCUSDT', interval = '1m', limite = 200, klines = pedirKlines } = {}) {
   const estado = {
     exchange_id: 'binance',
     symbol,
@@ -21,9 +21,17 @@ export function crearEstado({ symbol = 'BTCUSDT', interval = '1m', limite = 200 
     zoomYSnap: [0.4, 0.5, 0.6, 0.8, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0]
   };
 
+  let carga = 0;
+  let abortar = null;
+
   async function cargar() {
+    abortar?.abort();
+    const control = new AbortController();
+    abortar = control;
+    const id = ++carga;
     try {
-      const raw = await klines({ symbol: estado.symbol, interval: estado.interval, limit: estado.limite });
+      const raw = await klines({ symbol: estado.symbol, interval: estado.interval, limit: estado.limite, signal: control.signal });
+      if (id !== carga || control.signal.aborted) return estado;
       const norm = normalizarKlines(raw, { exchange_id: estado.exchange_id, symbol: estado.symbol, interval: estado.interval });
       estado.velas = norm.slice(-500);
       const last = estado.velas[estado.velas.length - 1];
@@ -32,9 +40,17 @@ export function crearEstado({ symbol = 'BTCUSDT', interval = '1m', limite = 200 
       estado.error = null;
       return estado;
     } catch (e) {
-      estado.error = e.message;
+      if (id === carga && !control.signal.aborted) estado.error = e.message;
       return estado;
+    } finally {
+      if (abortar === control) abortar = null;
     }
+  }
+
+  function cancelar() {
+    carga++;
+    abortar?.abort();
+    abortar = null;
   }
 
   async function setIntervalo(i) {
@@ -75,5 +91,5 @@ export function crearEstado({ symbol = 'BTCUSDT', interval = '1m', limite = 200 
     if (dir === 'k') estado.offsetY = estado.offsetY - 0.0005;
   }
 
-  return { estado, cargar, setIntervalo, zoomH, zoomV, mover };
+  return { estado, cargar, setIntervalo, zoomH, zoomV, mover, cancelar };
 }
