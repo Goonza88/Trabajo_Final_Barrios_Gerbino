@@ -4,6 +4,7 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { up as applyInitialMigration } from '../migraciones/001-inicial.mjs';
+import { up as migrateDecimalChecks } from '../migraciones/002-decimales-sin-punto-final.mjs';
 import {
   INTERVALS, ALERT_OPERATORS, OPERATION_SIDES,
   ORDER_TYPES, OPERATION_STATES, CONFIG_SOURCES,
@@ -16,6 +17,10 @@ import {
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT = path.resolve(HERE, '../../..');
+const MIGRATIONS = [
+  { id: '001-inicial', up: applyInitialMigration },
+  { id: '002-decimales-sin-punto-final', up: migrateDecimalChecks, foreignKeysOff: true },
+];
 
 function rows(stmt, ...args) { return stmt.all(...args).map(row => ({ ...row })); }
 function row(stmt, ...args) { const value = stmt.get(...args);
@@ -60,12 +65,26 @@ export function createData(options = {}) {
   const filename = options.path ?? path.join(PROJECT, 'data', 'app.db');
   if (filename !== ':memory:') mkdirSync(path.dirname(path.resolve(filename)), { recursive: true });
   const db = new DatabaseSync(filename);
-  db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
+  db.exec(`
+    PRAGMA foreign_keys = ON;
+    PRAGMA journal_mode = WAL;
+    PRAGMA busy_timeout = 5000;
+    PRAGMA synchronous = NORMAL;
+  `);
   db.exec('CREATE TABLE IF NOT EXISTS schema_migration (id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)');
-  const migrated = db.prepare('SELECT 1 AS ok FROM schema_migration WHERE id=?').get('001-inicial');
-  if (!migrated) {
-    transaction(db, () => { applyInitialMigration(db);
-      db.prepare('INSERT INTO schema_migration(id,applied_at) VALUES (?,?)').run('001-inicial', now(clock)); });
+  for (const migration of MIGRATIONS) {
+    const applied = db.prepare('SELECT 1 AS ok FROM schema_migration WHERE id=?').get(migration.id);
+    if (applied) continue;
+
+    if (migration.foreignKeysOff) db.exec('PRAGMA foreign_keys = OFF');
+    try {
+      transaction(db, () => {
+        migration.up(db);
+        db.prepare('INSERT INTO schema_migration(id,applied_at) VALUES (?,?)').run(migration.id, now(clock, 'applied_at'));
+      });
+    } finally {
+      if (migration.foreignKeysOff) db.exec('PRAGMA foreign_keys = ON');
+    }
   }
 
   const catalog = {

@@ -117,7 +117,10 @@ CREATE TABLE alerta (
   -- el umbral es un decimal simple: digitos con un punto y hasta 8 decimales
   CHECK (
     valor GLOB '[0-9]*' AND valor NOT GLOB '*[^0-9.]*' AND valor NOT GLOB '*.*.*'
-    AND (instr(valor, '.') = 0 OR length(valor) - instr(valor, '.') <= 8)
+    AND (
+      instr(valor, '.') = 0
+      OR (length(valor) - instr(valor, '.') BETWEEN 1 AND 8)
+    )
   ),
   FOREIGN KEY (exchange_id, symbol)
     REFERENCES simbolo(exchange_id, symbol) ON DELETE CASCADE
@@ -143,18 +146,18 @@ CREATE TABLE operacion (
   CHECK (
     (
       cantidad GLOB '[0-9]*' AND cantidad NOT GLOB '*[^0-9.]*' AND cantidad NOT GLOB '*.*.*'
-      AND (instr(cantidad, '.') = 0 OR length(cantidad) - instr(cantidad, '.') <= 8)
+      AND (instr(cantidad, '.') = 0 OR (length(cantidad) - instr(cantidad, '.') BETWEEN 1 AND 8))
     ) AND (
       precio_entrada GLOB '[0-9]*' AND precio_entrada NOT GLOB '*[^0-9.]*' AND precio_entrada NOT GLOB '*.*.*'
-      AND (instr(precio_entrada, '.') = 0 OR length(precio_entrada) - instr(precio_entrada, '.') <= 8)
+      AND (instr(precio_entrada, '.') = 0 OR (length(precio_entrada) - instr(precio_entrada, '.') BETWEEN 1 AND 8))
     ) AND (
       precio_salida IS NULL OR (
         precio_salida GLOB '[0-9]*' AND precio_salida NOT GLOB '*[^0-9.]*' AND precio_salida NOT GLOB '*.*.*'
-        AND (instr(precio_salida, '.') = 0 OR length(precio_salida) - instr(precio_salida, '.') <= 8)
+        AND (instr(precio_salida, '.') = 0 OR (length(precio_salida) - instr(precio_salida, '.') BETWEEN 1 AND 8))
       )
     ) AND (
       fees GLOB '[0-9]*' AND fees NOT GLOB '*[^0-9.]*' AND fees NOT GLOB '*.*.*'
-      AND (instr(fees, '.') = 0 OR length(fees) - instr(fees, '.') <= 8)
+      AND (instr(fees, '.') = 0 OR (length(fees) - instr(fees, '.') BETWEEN 1 AND 8))
     )
   ),
   FOREIGN KEY (exchange_id, symbol)
