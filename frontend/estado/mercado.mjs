@@ -176,9 +176,11 @@ export function crearEstado({
     estado.foco = estado.foco === 'watchlist' ? 'grafico' : 'watchlist';
   }
 
-  function zoomH(dir) {
-    if (dir === '+') estado.zoomX = Math.max(20, estado.zoomX - 5);
-    if (dir === '-') estado.zoomX = Math.min(160, estado.zoomX + 5);
+  function zoomH(dir, maxVisible = 160) {
+    const upper = Math.max(20, Math.min(160, Math.floor(maxVisible)));
+    const actual = Math.max(20, Math.min(estado.zoomX, upper));
+    if (dir === '+') estado.zoomX = Math.max(20, actual - 5);
+    if (dir === '-') estado.zoomX = Math.min(upper, actual + 5);
   }
 
   function zoomV(dir) {
@@ -198,9 +200,17 @@ export function crearEstado({
     if (dir === '-') estado.zoomY = Math.min(3, estado.zoomY + 0.1);
   }
 
-  function mover(dir) {
-    if (dir === 'h') estado.offset = Math.min(Math.max(0, estado.velas.length - estado.zoomX), estado.offset + 1);
-    if (dir === 'l') estado.offset = Math.max(0, estado.offset - 1);
+  function mover(dir, cantidadVisible = estado.zoomX) {
+    if (dir === 'h' || dir === 'l') {
+      const visible = Number.isFinite(cantidadVisible)
+        ? Math.max(1, Math.floor(cantidadVisible))
+        : Math.max(1, estado.zoomX);
+      const maxOffset = Math.max(0, estado.velas.length - visible);
+      const actual = Math.max(0, Math.min(maxOffset, estado.offset));
+      estado.offset = dir === 'h'
+        ? Math.min(maxOffset, actual + 1)
+        : Math.max(0, actual - 1);
+    }
     if (dir === 'j') estado.offsetY = estado.offsetY + 0.0005;
     if (dir === 'k') estado.offsetY = estado.offsetY - 0.0005;
   }

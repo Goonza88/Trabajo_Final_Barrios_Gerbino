@@ -9,6 +9,17 @@ const BLOCK8 = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 const HALF_UP = '╵';
 const HALF_DOWN = '╷';
 
+export function anchoPlot(width, showAxis = true) {
+  const totalW = Math.max(1, Math.floor(width));
+  const axisW = showAxis ? Math.min(9, Math.max(0, totalW - 1)) : 0;
+  return Math.max(1, totalW - axisW);
+}
+
+export function limitarVelas(velas, capacidad) {
+  const max = Math.max(1, Math.floor(capacidad));
+  return velas.length > max ? velas.slice(-max) : velas;
+}
+
 // escribe texto en una fila de celdas, un caracter por columna
 function putText(cells, row, col, text, style) {
   const line = cells[row];
@@ -36,10 +47,11 @@ export function graficoVelas({
 
   const totalW = Math.max(1, Math.floor(width));
   const axisW = showAxis ? Math.min(9, Math.max(0, totalW - 1)) : 0;
-  const plotW = Math.max(1, totalW - axisW);
+  const plotW = anchoPlot(totalW, showAxis);
   const totalH = Math.max(showAxis ? 2 : 1, Math.floor(height));
   const plotH = Math.max(1, totalH - (showAxis ? 1 : 0));
   const cells = Array.from({ length: totalH }, () => Array(totalW).fill(null));
+  velas = limitarVelas(velas, plotW);
 
   if (!velas.length) {
     putText(cells, 0, 0, 'sin velas', { fg: 'muted' });

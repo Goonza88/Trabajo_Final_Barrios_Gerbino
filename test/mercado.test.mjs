@@ -264,6 +264,29 @@ test('moverCursor y seleccionarCursor eligen dentro de la watchlist', async () =
   assert.equal(estado.foco, 'grafico');
 });
 
+test('pan usa la cantidad realmente visible y vuelve a fijar al moverse', () => {
+  const { estado, mover, zoomH } = crearEstado({ cargarVelas: async () => [] });
+  estado.velas = Array.from({ length: 100 }, (_, i) => vela(i));
+  estado.zoomX = 80;
+
+  mover('h', 40);
+  assert.equal(estado.offset, 1);
+  for (let i = 0; i < 59; i++) mover('h', 40);
+  assert.equal(estado.offset, 60);
+  mover('h', 40);
+  assert.equal(estado.offset, 60, 'no desplaza mas que la primera vela');
+
+  mover('l', 80);
+  assert.equal(estado.offset, 19, 'al ampliar la vista, parte del offset previo no es valido');
+
+  zoomH('+', 40);
+  assert.equal(estado.zoomX, 35, 'el zoom responde desde el maximo que cabe');
+  zoomH('-', 40);
+  assert.equal(estado.zoomX, 40);
+  zoomH('-', 40);
+  assert.equal(estado.zoomX, 40, 'no intenta mostrar mas velas que las columnas disponibles');
+});
+
 test('cancelar descarta tambien la respuesta de tickers', async () => {
   const pendiente = deferred();
   const { estado, cargarTickers, cancelar } = crearEstado({

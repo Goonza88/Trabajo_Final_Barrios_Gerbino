@@ -2,7 +2,7 @@ import { box, gap, rows, split, table, text } from '../../backend/terminal/widge
 import { size } from '../../backend/terminal/runtime.mjs';
 import { sanitize } from '../../backend/terminal/ansi.mjs';
 import { boxSize } from '../../backend/terminal/layout.mjs';
-import { graficoVelas } from '../graficos/velas.mjs';
+import { anchoPlot, graficoVelas } from '../graficos/velas.mjs';
 import { anchoWatchlist, fmtPrecio, fmtVariacion, indiceTickers, variacion, vistaWatchlist } from '../features/watchlist.mjs';
 
 function fmtHora(ts) {
@@ -10,7 +10,35 @@ function fmtHora(ts) {
   try { return new Date(ts).toLocaleTimeString('es-AR'); } catch { return '-'; }
 }
 
-function panelGrafico(estado, width, height, modoTabla) {
+function dimensionesMercado(estado, cols) {
+  const watchW = Math.max(anchoWatchlist(estado), Math.min(32, Math.floor(cols * 0.38)));
+  const chartW = Math.max(1, cols - watchW - 1);
+  return { watchW, chartW };
+}
+
+export function capacidadVelas(estado, cols = size().cols) {
+  const { chartW } = dimensionesMercado(estado, cols);
+  const marco = { border: 'round', pad: [0, 1] };
+  const { innerW } = boxSize(marco, chartW);
+  return anchoPlot(innerW, true);
+}
+
+export function cantidadVelasVisibles(estado, modoTabla = false, cols = size().cols) {
+  const zoomX = Math.max(1, Math.floor(estado.zoomX ?? 80));
+  return modoTabla ? zoomX : Math.min(zoomX, capacidadVelas(estado, cols));
+}
+
+export function ventanaVelas(velas, cantidad, offset = 0) {
+  const count = Math.max(1, Math.floor(cantidad));
+  const maxOffset = Math.max(0, velas.length - count);
+  const safeOffset = Number.isFinite(offset)
+    ? Math.max(0, Math.min(maxOffset, Math.floor(offset)))
+    : 0;
+  const end = velas.length - safeOffset;
+  return velas.slice(Math.max(0, end - count), end);
+}
+
+function panelGrafico(estado, width, height, modoTabla, visibleCount) {
   const marco = {
     border: 'round',
     pad: [0, 1],
@@ -19,10 +47,7 @@ function panelGrafico(estado, width, height, modoTabla) {
   };
   const { innerW, innerH } = boxSize(marco, width);
   const error = estado.error ? sanitize(estado.error) : null;
-  const total = estado.velas.length;
-  const start = Math.max(0, total - estado.zoomX - estado.offset);
-  const end = Math.max(start, total - estado.offset);
-  const vis = estado.velas.slice(start, end);
+  const vis = ventanaVelas(estado.velas, visibleCount, estado.offset);
   const ticker = indiceTickers(estado.tickers)[estado.symbol];
   const precio = estado.ultimo ?? ticker?.price ?? null;
   const cabecera = estado.symbol + ' ' + estado.interval + ' | ' + fmtPrecio(precio)
@@ -65,15 +90,15 @@ function panelGrafico(estado, width, height, modoTabla) {
 export function vistaMercado(estado, modoTabla = false) {
   const { cols, rows: filasTerminal } = size();
   const height = filasTerminal;
-  const watchW = Math.max(anchoWatchlist(estado), Math.min(32, Math.floor(cols * 0.38)));
-  const chartW = Math.max(1, cols - watchW - 1);
+  const { watchW, chartW } = dimensionesMercado(estado, cols);
+  const visibleCount = cantidadVelasVisibles(estado, modoTabla, cols);
   return split({
     dir: 'h',
     sizes: [watchW, null],
     gap: 1,
     children: [
       vistaWatchlist(estado, { width: watchW, height }),
-      panelGrafico(estado, chartW, height, modoTabla)
+      panelGrafico(estado, chartW, height, modoTabla, visibleCount)
     ]
   });
 }

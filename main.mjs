@@ -7,7 +7,7 @@ import { setPalette } from './backend/terminal/ansi.mjs';
 import { PALETA } from './frontend/paleta.mjs';
 import { box, rows, text, gap } from './backend/terminal/widgets.mjs';
 import { crearEstado } from './frontend/estado/mercado.mjs';
-import { vistaMercado } from './frontend/vistas/mercado.mjs';
+import { capacidadVelas, cantidadVelasVisibles, vistaMercado } from './frontend/vistas/mercado.mjs';
 
 setPalette(PALETA);
 
@@ -135,12 +135,12 @@ function mercadoApp() {
           if (event.key === 'k' || event.key === 'ArrowUp') { moverCursor(-1); return estado; }
           return estado;
         }
-        if (event.key === 'h' || event.key === 'ArrowLeft') { mover('h'); return estado; }
+        if (event.key === 'h' || event.key === 'ArrowLeft') { mover('h', cantidadVelasVisibles(estado, modoTabla)); return estado; }
         if (event.key === 'j' || event.key === 'ArrowDown') { mover('j'); return estado; }
         if (event.key === 'k' || event.key === 'ArrowUp') { mover('k'); return estado; }
-        if (event.key === 'l' || event.key === 'ArrowRight') { mover('l'); return estado; }
-        if (event.key === 'y') { zoomH('-'); return estado; }
-        if (event.key === 'o') { zoomH('+'); return estado; }
+        if (event.key === 'l' || event.key === 'ArrowRight') { mover('l', cantidadVelasVisibles(estado, modoTabla)); return estado; }
+        if (event.key === 'y') { zoomH('-', modoTabla ? 160 : capacidadVelas(estado)); return estado; }
+        if (event.key === 'o') { zoomH('+', modoTabla ? 160 : capacidadVelas(estado)); return estado; }
         if (event.key === 'u') { zoomV('-'); return estado; }
         if (event.key === 'i') { zoomV('+'); return estado; }
       }

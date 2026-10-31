@@ -4,8 +4,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { flatten } from '../backend/terminal/view.mjs';
 import { sanitize, toAnsi } from '../backend/terminal/ansi.mjs';
-import { graficoVelas } from '../frontend/graficos/velas.mjs';
-import { vistaMercado } from '../frontend/vistas/mercado.mjs';
+import { anchoPlot, graficoVelas, limitarVelas } from '../frontend/graficos/velas.mjs';
+import { capacidadVelas, cantidadVelasVisibles, ventanaVelas, vistaMercado } from '../frontend/vistas/mercado.mjs';
 import { anchoWatchlist, lineasAyuda, vistaWatchlist } from '../frontend/features/watchlist.mjs';
 
 function velas(cantidad, base = 100) {
@@ -68,6 +68,48 @@ test('graficoVelas sin velas ocupa el grid y avisa', () => {
 
 test('graficoVelas exige width y height', () => {
   assert.throws(() => graficoVelas({ velas: velas(2) }), /faltan width y height/);
+});
+
+test('el grafico muestra solo velas reales que entran en el area', () => {
+  const fuente = velas(12);
+  const capacidad = anchoPlot(13, true);
+  const visibles = limitarVelas(fuente, capacidad);
+  const node = graficoVelas({ velas: fuente, width: 13, height: 8 });
+
+  assert.equal(capacidad, 4);
+  assert.equal(visibles.length, capacidad);
+  assert.deepEqual(visibles, fuente.slice(-capacidad));
+  assert.equal(node.width, 13);
+  assert.equal(node.height, 8);
+});
+
+test('la capacidad depende del ancho y modo tabla conserva ventana', () => {
+  const estado = { zoomX: 80, intervalos: ['1m', '5m', '1h', '4h', '1d'] };
+  const capacidad = capacidadVelas(estado, 80);
+
+  assert.ok(capacidad > 0 && capacidad < estado.zoomX);
+  assert.equal(cantidadVelasVisibles(estado, false, 80), capacidad);
+  assert.equal(cantidadVelasVisibles({ ...estado, zoomX: 20 }, false, 80), 20);
+  assert.equal(cantidadVelasVisibles(estado, true, 80), 80);
+});
+
+test('la ventana muestra velas consecutivas', () => {
+  const fuente = velas(10);
+
+  assert.deepEqual(ventanaVelas(fuente, 4), fuente.slice(6));
+  assert.deepEqual(ventanaVelas(fuente, 4, 2), fuente.slice(4, 8));
+  assert.deepEqual(ventanaVelas(fuente, 4, 100), fuente.slice(0, 4));
+});
+
+test('el monitor muestra velas consecutivas hasta el maximo que entra', () => {
+  const estado = { zoomX: 80, intervalos: ['1m', '5m', '1h', '4h', '1d'] };
+  const capacidad = cantidadVelasVisibles(estado, false, 80);
+  const fuente = velas(capacidad * 2);
+  const visibles = ventanaVelas(fuente, capacidad);
+
+  assert.equal(visibles.length, capacidad);
+  assert.equal(visibles.at(-1), fuente.at(-1));
+  assert.ok(visibles.every((vela, i) => i === 0 || vela.open_time - visibles[i - 1].open_time === 60000));
 });
 
 test('vistaMercado compone watchlist y grafico sin romper', () => {
