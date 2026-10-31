@@ -35,6 +35,7 @@ export function crearEstado({
     offset: 0,
     offsetY: 0,
     precision: false,
+    indicadores: { sma: false, ema: false, rsi: false, volume: false, bollinger: true },
     zoomYBeforePrecision: null,
     zoomYSnap: [0.4, 0.5, 0.6, 0.8, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0]
   };
@@ -176,6 +177,12 @@ export function crearEstado({
     estado.foco = estado.foco === 'watchlist' ? 'grafico' : 'watchlist';
   }
 
+  function alternarIndicador(nombre) {
+    if (Object.hasOwn(estado.indicadores, nombre)) {
+      estado.indicadores[nombre] = !estado.indicadores[nombre];
+    }
+  }
+
   function zoomH(dir, maxVisible = 160) {
     const upper = Math.max(20, Math.min(160, Math.floor(maxVisible)));
     const actual = Math.max(20, Math.min(estado.zoomX, upper));
@@ -225,6 +232,7 @@ export function crearEstado({
     seleccionarCursor,
     setFoco,
     alternarFoco,
+    alternarIndicador,
     zoomH,
     zoomV,
     mover,

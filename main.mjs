@@ -53,6 +53,13 @@ const home = {
 };
 
 let modoTabla = false;
+const INDICADORES_POR_TECLA = {
+  '1': 'sma',
+  '2': 'ema',
+  '3': 'rsi',
+  '4': 'volume',
+  '5': 'bollinger',
+};
 
 function alTerminarCarga(promesa) {
   promesa.then(() => invalidate());
@@ -69,6 +76,7 @@ function mercadoApp() {
     seleccionarCursor,
     setFoco,
     alternarFoco,
+    alternarIndicador,
     zoomH,
     zoomV,
     mover,
@@ -103,6 +111,10 @@ function mercadoApp() {
         }
         if (event.key === 't') {
           modoTabla = !modoTabla;
+          return estado;
+        }
+        if (INDICADORES_POR_TECLA[event.key]) {
+          alternarIndicador(INDICADORES_POR_TECLA[event.key]);
           return estado;
         }
         if (event.key === 'p') {

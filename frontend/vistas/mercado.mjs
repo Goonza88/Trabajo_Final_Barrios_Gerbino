@@ -4,6 +4,7 @@ import { sanitize } from '../../backend/terminal/ansi.mjs';
 import { boxSize } from '../../backend/terminal/layout.mjs';
 import { anchoPlot, graficoVelas } from '../graficos/velas.mjs';
 import { anchoWatchlist, fmtPrecio, fmtVariacion, indiceTickers, variacion, vistaWatchlist } from '../features/watchlist.mjs';
+import { calcularIndicadores, PERIODOS_INDICADORES } from '../../backend/metricas/indicadores.mjs';
 
 function fmtHora(ts) {
   if (!ts) return '-';
@@ -28,14 +29,31 @@ export function cantidadVelasVisibles(estado, modoTabla = false, cols = size().c
   return modoTabla ? zoomX : Math.min(zoomX, capacidadVelas(estado, cols));
 }
 
-export function ventanaVelas(velas, cantidad, offset = 0) {
+export function rangoVentanaVelas(total, cantidad, offset = 0) {
   const count = Math.max(1, Math.floor(cantidad));
-  const maxOffset = Math.max(0, velas.length - count);
+  const maxOffset = Math.max(0, total - count);
   const safeOffset = Number.isFinite(offset)
     ? Math.max(0, Math.min(maxOffset, Math.floor(offset)))
     : 0;
-  const end = velas.length - safeOffset;
-  return velas.slice(Math.max(0, end - count), end);
+  const fin = total - safeOffset;
+  return { inicio: Math.max(0, fin - count), fin };
+}
+
+export function ventanaVelas(velas, cantidad, offset = 0) {
+  const { inicio, fin } = rangoVentanaVelas(velas.length, cantidad, offset);
+  return velas.slice(inicio, fin);
+}
+
+function leyendaIndicadores(estado) {
+  const activos = estado.indicadores ?? {};
+  const estadoCorto = nombre => activos[nombre] ? '+' : '-';
+  return [
+    `1:SMA${PERIODOS_INDICADORES.sma}${estadoCorto('sma')}`,
+    `2:EMA${PERIODOS_INDICADORES.ema}${estadoCorto('ema')}`,
+    `3:RSI${PERIODOS_INDICADORES.rsi}${estadoCorto('rsi')}`,
+    `4:VOL${estadoCorto('volume')}`,
+    `5:BB${PERIODOS_INDICADORES.bollinger}x${PERIODOS_INDICADORES.bollingerDesviaciones}${estadoCorto('bollinger')}`
+  ].join(' ');
 }
 
 function panelGrafico(estado, width, height, modoTabla, visibleCount) {
@@ -47,7 +65,23 @@ function panelGrafico(estado, width, height, modoTabla, visibleCount) {
   };
   const { innerW, innerH } = boxSize(marco, width);
   const error = estado.error ? sanitize(estado.error) : null;
-  const vis = ventanaVelas(estado.velas, visibleCount, estado.offset);
+  const { inicio, fin } = rangoVentanaVelas(estado.velas.length, visibleCount, estado.offset);
+  const vis = estado.velas.slice(inicio, fin);
+  const activos = estado.indicadores ?? {};
+  const necesitaCalculo = Object.values(activos).some(Boolean);
+  const calculados = necesitaCalculo ? calcularIndicadores(estado.velas) : null;
+  const recortar = valores => valores.slice(inicio, fin);
+  const indicadores = {
+    sma: activos.sma ? recortar(calculados.sma) : null,
+    ema: activos.ema ? recortar(calculados.ema) : null,
+    rsi: activos.rsi ? recortar(calculados.rsi) : null,
+    volume: activos.volume ? recortar(calculados.volume) : null,
+    bollinger: activos.bollinger ? {
+      middle: recortar(calculados.bollinger.middle),
+      upper: recortar(calculados.bollinger.upper),
+      lower: recortar(calculados.bollinger.lower),
+    } : null,
+  };
   const ticker = indiceTickers(estado.tickers)[estado.symbol];
   const precio = estado.ultimo ?? ticker?.price ?? null;
   const cabecera = estado.symbol + ' ' + estado.interval + ' | ' + fmtPrecio(precio)
@@ -65,6 +99,7 @@ function panelGrafico(estado, width, height, modoTabla, visibleCount) {
     ]);
     return box(rows([
       text(cabecera, { fg: 'accent' }),
+      text(leyendaIndicadores(estado), { fg: 'muted' }),
       gap(1),
       table({ headers: ['hora', 'open', 'high', 'low', 'close', 'vol'], rows: filas, fill: true, align: 'center' }),
       error ? text('err: ' + error, { fg: 'danger' }) : null
@@ -73,15 +108,17 @@ function panelGrafico(estado, width, height, modoTabla, visibleCount) {
 
   return box(rows([
     text(cabecera, { fg: 'accent' }),
+    text(leyendaIndicadores(estado), { fg: 'muted' }),
     gap(1),
     graficoVelas({
       velas: vis,
       width: innerW,
-      height: Math.max(2, (innerH ?? height) - 3),
+      height: Math.max(2, (innerH ?? height) - 4),
       showAxis: true,
       interval: estado.interval,
       zoomY: estado.zoomY,
-      offsetY: estado.offsetY || 0
+      offsetY: estado.offsetY || 0,
+      indicadores,
     }),
     error ? text('err: ' + error, { fg: 'danger' }) : null
   ].filter(Boolean)), marco);
