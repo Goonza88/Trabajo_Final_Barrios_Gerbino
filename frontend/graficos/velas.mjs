@@ -297,46 +297,283 @@ export function graficoVelas({
     return rows;
   }
 
+  // bordes del cuerpo por octavos - q es la posicion del borde dentro de la fila
+  function bloqueArriba(q, style) {
+    if (q <= 0) return null;
+    if (q >= 8) return { ch: '█', style };
+    return { ch: BLOCK8[8 - q], style: { ...style, reverse: true } };
+  }
+
+  function bloqueAbajo(q, style) {
+    if (q >= 8) return null;
+    if (q <= 0) return { ch: '█', style };
+    return { ch: BLOCK8[8 - q], style };
+  }
+
+  function bordeSuperior(celda) {
+    const rowTop = celda.row - 0.5;
+    if (celda.ch === '█') return rowTop;
+    const k = BLOCK8.indexOf(celda.ch);
+    return celda.style?.reverse ? rowTop : rowTop + (8 - k) / 8;
+  }
+
+  function bordeInferior(celda) {
+    const rowTop = celda.row - 0.5;
+    if (celda.ch === '█') return rowTop + 1;
+    const k = BLOCK8.indexOf(celda.ch);
+    return celda.style?.reverse ? rowTop + (8 - k) / 8 : rowTop + 1;
+  }
+
+  function errorCuerpo(top, bottom, yTop, yBottom) {
+    return (top - yTop) ** 2 + (bottom - yBottom) ** 2;
+  }
+
+  function estadoCuerpo(top, bottom, celdas, yTop, yBottom, alcista) {
+    return {
+      top,
+      bottom,
+      open: alcista ? bottom : top,
+      close: alcista ? top : bottom,
+      celdas,
+      local: errorCuerpo(top, bottom, yTop, yBottom),
+    };
+  }
+
+  // una o dos formas para dibujar el cuerpo, segun si entra en una fila o no
+  function estadosCuerpo(pO, pC, style) {
+    const yTop = Math.min(pO, pC);
+    const yBottom = Math.max(pO, pC);
+    const alcista = pC <= pO;
+    const vacio = [{ top: NaN, bottom: NaN, open: NaN, close: NaN, celdas: [], local: 0 }];
+    if (!Number.isFinite(yTop) || !Number.isFinite(yBottom)) return vacio;
+    if (yBottom < -0.5 || yTop > plotH - 0.5) return vacio;
+
+    if (yBottom - yTop <= 1e-9) {
+      // doji - marca en el octavo mas cercano, borde en el precio
+      const row = Math.max(0, Math.min(plotH - 1, Math.floor(yTop + 0.5)));
+      const rowTop = row - 0.5;
+      const q = Math.max(1, Math.min(7, Math.round((yTop - rowTop) * 8)));
+      const borde = rowTop + q / 8;
+      const celda = q <= 4 ? bloqueArriba(q, style) : bloqueAbajo(q, style);
+      return [estadoCuerpo(
+        borde,
+        borde,
+        celda ? [{ row, ...celda }] : [],
+        yTop,
+        yBottom,
+        alcista
+      )];
+    }
+
+    const first = Math.max(0, Math.floor(yTop + 0.5));
+    const last = Math.min(plotH - 1, Math.floor(yBottom + 0.5));
+    if (first > last) return vacio;
+    const rowTop = first - 0.5;
+    const rowBottom = first + 0.5;
+
+    if (first === last && yTop > rowTop + 1e-9 && yBottom < rowBottom - 1e-9) {
+      const qT = Math.max(1, Math.min(7, Math.round((yTop - rowTop) * 8)));
+      const qB = Math.max(1, Math.min(7, Math.round((yBottom - rowTop) * 8)));
+      const topArriba = rowTop + qT / 8;
+      const bottomAbajo = rowTop + qB / 8;
+      const celdaArriba = bloqueAbajo(qT, style);
+      const celdaAbajo = bloqueArriba(qB, style);
+      return [
+        estadoCuerpo(
+          topArriba,
+          rowBottom,
+          celdaArriba ? [{ row: first, ...celdaArriba }] : [],
+          yTop,
+          yBottom,
+          alcista
+        ),
+        estadoCuerpo(
+          rowTop,
+          bottomAbajo,
+          celdaAbajo ? [{ row: first, ...celdaAbajo }] : [],
+          yTop,
+          yBottom,
+          alcista
+        ),
+      ];
+    }
+
+    if (first === last) {
+      const filaTop = first - 0.5;
+      const filaBottom = first + 0.5;
+      const arribaDentro = yTop > filaTop + 1e-9;
+      const abajoDentro = yBottom < filaBottom - 1e-9;
+      const qT = arribaDentro
+        ? Math.max(0, Math.min(7, Math.round((yTop - filaTop) * 8)))
+        : 0;
+      const qB = abajoDentro
+        ? Math.max(1, Math.min(8, Math.round((yBottom - filaTop) * 8)))
+        : 8;
+      const celda = arribaDentro
+        ? bloqueAbajo(qT, style)
+        : abajoDentro ? bloqueArriba(qB, style) : { ch: '█', style };
+      if (!celda) return vacio;
+      return [estadoCuerpo(
+        bordeSuperior({ row: first, ...celda }),
+        bordeInferior({ row: first, ...celda }),
+        [{ row: first, ...celda }],
+        yTop,
+        yBottom,
+        alcista
+      )];
+    }
+
+    const capTop = first - 0.5;
+    const capBottom = last - 0.5;
+    const qT0 = yTop > capTop + 1e-9
+      ? Math.max(0, Math.min(8, Math.round((yTop - capTop) * 8)))
+      : 0;
+    const qB0 = yBottom < capBottom + 1 - 1e-9
+      ? Math.max(0, Math.min(8, Math.round((yBottom - capBottom) * 8)))
+      : 8;
+
+    // en borde que cae sobre limite de fila, el DP elije cual dibujar
+    const opcionesT = qT0 === 0 ? [0, 1] : qT0 === 8 ? [8, 7] : [qT0];
+    const opcionesB = qB0 === 0 ? [0, 1] : qB0 === 8 ? [8, 7] : [qB0];
+    const estados = [];
+    for (const qT of opcionesT) {
+      for (const qB of opcionesB) {
+        const celdas = [];
+        if (qT === 0) {
+          celdas.push({ row: first, ch: '█', style });
+        } else if (qT < 8) {
+          const celda = bloqueAbajo(qT, style);
+          if (celda) celdas.push({ row: first, ...celda });
+        }
+        for (let r = first + 1; r < last; r++) {
+          celdas.push({ row: r, ch: '█', style });
+        }
+        if (qB === 8) {
+          celdas.push({ row: last, ch: '█', style });
+        } else if (qB > 0) {
+          const celda = bloqueArriba(qB, style);
+          if (celda) celdas.push({ row: last, ...celda });
+        }
+        if (!celdas.length) continue;
+        estados.push(estadoCuerpo(
+          capTop + qT / 8,
+          capBottom + qB / 8,
+          celdas,
+          yTop,
+          yBottom,
+          alcista
+        ));
+      }
+    }
+    if (estados.length) return estados;
+
+    // cuerpo mas delgado que un octavo justo sobre un limite de fila
+    const medio = (yTop + yBottom) / 2;
+    const row = Math.max(0, Math.min(plotH - 1, Math.floor(medio + 0.5)));
+    const filaTopMarca = row - 0.5;
+    const q = Math.max(1, Math.min(7, Math.round((medio - filaTopMarca) * 8)));
+    const borde = filaTopMarca + q / 8;
+    const celda = q <= 4 ? bloqueArriba(q, style) : bloqueAbajo(q, style);
+    return [estadoCuerpo(
+      borde,
+      borde,
+      celda ? [{ row, ...celda }] : [],
+      yTop,
+      yBottom,
+      alcista
+    )];
+  }
+
+  function mismoPrecio(a, b) {
+    const x = Number(a), y = Number(b);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+    return Math.abs(x - y) <= Math.max(1e-9, Math.max(Math.abs(x), Math.abs(y)) * 1e-9);
+  }
+
+  // elige la variante que mejor coincide con cierre/apertura de velas vecinas
+  function elegirCuerpos(cuerpos) {
+    const n = cuerpos.length;
+    if (!n) return [];
+    const PESO_LOCAL = 1e-6;
+    const PESO_EMPALME = 4;
+    const dp = Array.from({ length: n }, () => []);
+    const desde = Array.from({ length: n }, () => []);
+    for (let s = 0; s < cuerpos[0].estados.length; s++) {
+      dp[0][s] = cuerpos[0].estados[s].local * PESO_LOCAL;
+    }
+    for (let i = 1; i < n; i++) {
+      const estados = cuerpos[i].estados;
+      const anteriores = cuerpos[i - 1].estados;
+      const comparte = mismoPrecio(velas[i - 1]?.close, velas[i]?.open);
+      for (let s = 0; s < estados.length; s++) {
+        let mejor = Infinity;
+        let mejorPrev = 0;
+        for (let p = 0; p < anteriores.length; p++) {
+          const base = dp[i - 1][p];
+          if (!Number.isFinite(base)) continue;
+          const a = anteriores[p];
+          const b = estados[s];
+          const empalme = comparte && Number.isFinite(a.close) && Number.isFinite(b.open)
+            ? (a.close - b.open) ** 2 * PESO_EMPALME
+            : 0;
+          const costo = base + empalme;
+          if (costo < mejor) {
+            mejor = costo;
+            mejorPrev = p;
+          }
+        }
+        dp[i][s] = mejor + estados[s].local * PESO_LOCAL;
+        desde[i][s] = mejorPrev;
+      }
+    }
+    let elegido = 0;
+    for (let s = 1; s < dp[n - 1].length; s++) {
+      if (dp[n - 1][s] < dp[n - 1][elegido]) elegido = s;
+    }
+    const eleccion = Array(n);
+    eleccion[n - 1] = elegido;
+    for (let i = n - 1; i > 0; i--) eleccion[i - 1] = desde[i][eleccion[i]];
+    return eleccion;
+  }
+
+  const cuerpos = velas.map((c, i) => {
+    const o = Number(c.open), cl = Number(c.close);
+    const col = colForIndex(i);
+    const style = { fg: cl >= o ? 'success' : 'danger' };
+    if (col < 0 || col >= plotW) {
+      return { col, style, estados: [{ top: NaN, bottom: NaN, open: NaN, close: NaN, celdas: [], local: 0 }] };
+    }
+    return { col, style, estados: estadosCuerpo(py(o), py(cl), style) };
+  });
+  const eleccion = elegirCuerpos(cuerpos);
+
   for (let i = 0; i < velas.length; i++) {
     const c = velas[i];
     const o = Number(c.open), cl = Number(c.close), lo = Number(c.low), hi = Number(c.high);
-    const role = cl >= o ? 'success' : 'danger';
-    const style = { fg: role };
-    const col = colForIndex(i);
+    const { col, style } = cuerpos[i];
     if (col < 0 || col >= plotW) continue;
-    const pH = py(hi), pL = py(lo), pO = py(o), pC = py(cl);
+    const pH = py(hi), pL = py(lo);
     const wickRows = rowsCovered(pH, pL);
-    const bodyRows = rowsCovered(pO, pC);
-    const bodySet = new Set(bodyRows);
     for (const r of wickRows) {
       if (plot[r]) plot[r][col] = { ch: '|', style };
-    }
-    for (const r of bodyRows) {
-      if (plot[r]) plot[r][col] = { ch: '█', style };
     }
     // puntas por octavos, mechas por mitades
     if (wickRows.length > 1) {
       const top = wickRows[0];
       if (pH > -0.5 && pH < plotH - 0.5) {
         const f = Math.min(1, Math.max(0, top + 0.5 - pH));
-        if (bodySet.has(top)) {
-          const k = Math.max(1, Math.min(8, Math.round(f * 8)));
-          plot[top][col] = k >= 8 ? { ch: '█', style } : { ch: BLOCK8[k], style };
-        } else if (f < 0.75) {
-          plot[top][col] = { ch: HALF_DOWN, style };
-        }
+        if (f < 0.75) plot[top][col] = { ch: HALF_DOWN, style };
       }
       const bottom = wickRows[wickRows.length - 1];
       if (pL > -0.5 && pL < plotH - 0.5) {
         const u = Math.min(1, Math.max(0, pL - (bottom - 0.5)));
-        if (bodySet.has(bottom)) {
-          const k = Math.max(1, Math.min(8, Math.round(u * 8)));
-          plot[bottom][col] = k >= 8 ? { ch: '█', style }
-            : { ch: BLOCK8[8 - k], style: { fg: role, reverse: true } };
-        } else if (u < 0.75) {
-          plot[bottom][col] = { ch: HALF_UP, style };
-        }
+        if (u < 0.75) plot[bottom][col] = { ch: HALF_UP, style };
       }
+    }
+    // el cuerpo se pinta al final para que su borde no lo pise la mecha
+    const estado = cuerpos[i].estados[eleccion[i]];
+    for (const celda of estado.celdas) {
+      if (plot[celda.row]) plot[celda.row][col] = { ch: celda.ch, style: celda.style };
     }
   }
 
