@@ -22,7 +22,7 @@ Definimos la prioridad de la siguiente forma:
 | casos de uso de mercado | `backend/dominio` | coordina la consulta y normalizacion de velas y tickers para la interfaz, sin calcular indicadores |
 | conexion REST de exchange | `backend/red` | consulta las velas y el ticker que dice la configuracion |
 | normalizador de respuestas | `backend/red` | lleva la respuesta de cada exchange al formato interno |
-| indicadores basicos | `backend/metricas` | media simple, media exponencial, RSI y volumen medio |
+| indicadores basicos | `backend/metricas` | media simple, media exponencial, RSI, bandas de Bollinger y volumen |
 | aritmetica decimal | `backend/metricas` | valida y parsea decimales y hace cuentas sin perder precision |
 | layout y navegacion | `frontend/vistas` | reparte pantalla en paneles y mueve el foco |
 | grafico de velas | `frontend/graficos` | dibuja precio, las velas y los indicadores |
