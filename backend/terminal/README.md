@@ -17,7 +17,7 @@ Manejar esas secuencias de escape cada vez que queremos hacer algo es inviable, 
 - Producir los bytes correctos usando el vocabulario de ordenes `escape`, la traduccion de estilos `toAnsi` y la paleta por rol.
 - Leer y ajustar texto para pintarlo en la grilla, midiendo el ancho unicode para caracteres que ocupan mas o menos de una celda, limpiando texto con escapes y recortando a anchos visibles.
 
-Los colores se nombran por rol (`text`, `accent`, `sec`, `danger`, `muted`, `reader`, `success`, y el de fondo `selected`), nunca por valor. La paleta que trae `ansi.mjs` es un default neutro: el substrato no conoce la identidad visual de ninguna app. La capa que define esa identidad (en nuestro proyecto, `frontend/paleta.mjs`) aplica sus colores con `setPalette` antes de llamar a `run()`, un rol desconocido lanza error, y los demos se quedan con los defaults.
+Los colores se nombran por rol (`text`, `accent`, `sec`, `danger`, `muted`, `reader`, `success`, y los de fondo `selected`, `successBg` y `dangerBg`), nunca por valor. La paleta que trae `ansi.mjs` es un default neutro: el substrato no conoce la identidad visual de ninguna app. La capa que define esa identidad (en nuestro proyecto, `frontend/paleta.mjs`) aplica sus colores con `setPalette` antes de llamar a `run()`, un rol desconocido lanza error, y los demos se quedan con los defaults.
 
 ## input.mjs
 
@@ -28,7 +28,7 @@ Esta capa de entrada se encarga de tomar esos bytes y convertirlos en eventos no
 Cada byte se convierte en un evento con una forma estable:
 
 - Teclado: `{ type: 'key', key, shift, alt, ctrl }`
-- Mouse: `{ type: 'mouse', btn, col, row, phase, dx, dy }`
+- Mouse: `{ type: 'mouse', btn, col, row, down, phase, dx, dy }`
 
 Las secuencias se resuelven con tablas (`KEYS` y `FINALS`/`TILDES`) mas los controles de texto plano (Ctrl+C, Enter, Tab, Backspace). Como los chunks se cortan donde quieren, el `Dispatcher` guarda estado entre chunks. Un caracter cortado se retiene hasta completar y una secuencia incompleta espera hasta su byte final antes de emitirla.
 

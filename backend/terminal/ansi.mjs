@@ -64,7 +64,7 @@ export const palette = {
   success: escape.fg(0x6f, 0xac, 0x67),
 };
 
-// paleta de colores raw, defaults neutros - selected es el fondo - reemplazables con setPalette
+// paleta de colores raw, defaults neutros - reemplazables con setPalette
 const raw = {
   text:     [0xaa, 0xab, 0xac],
   accent:   [0x98, 0x6c, 0x98],
@@ -73,7 +73,9 @@ const raw = {
   muted:    [0x88, 0x88, 0x88],
   reader:   [0x66, 0x66, 0x66],
   success:  [0x6f, 0xac, 0x67],
-  selected: [0x25, 0x27, 0x27],
+  selected:  [0x25, 0x27, 0x27],
+  successBg: [0x14, 0x1f, 0x13],
+  dangerBg:  [0x1b, 0x10, 0x0f],
 };
 
 // reemplaza colores de la paleta por rol - rol desconocido lanza, el resto conserva color

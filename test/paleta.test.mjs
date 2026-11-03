@@ -47,6 +47,14 @@ test('sanitize limpia controles y escapes externos', () => {
   assert.equal(sanitize('a\r\x1b[31mb\tc'), 'ab  c');
 });
 
+test('successBg y dangerBg son roles de fondo como selected', () => {
+  setPalette({ successBg: '#0f1a01', dangerBg: [45, 15, 14] });
+  assert.equal(palette.successBg, undefined);
+  assert.equal(palette.dangerBg, undefined);
+  assert.equal(toAnsi({ bg: 'successBg' }), escape.bg(15, 26, 1));
+  assert.equal(toAnsi({ bg: 'dangerBg' }), escape.bg(45, 15, 14));
+});
+
 test('selected es rol de fondo: existe en setPalette pero no en palette', () => {
   setPalette({ selected: '#000608' });                                          // no tira error, rol valido
   assert.equal(palette.selected, undefined);                                      // no tiene pintado fg

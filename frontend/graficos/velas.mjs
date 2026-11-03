@@ -1,7 +1,6 @@
 // arma el grafico de velas como una matriz de celdas para el substrato
 
 import { grid, table } from '../../backend/terminal/widgets.mjs';
-import { PALETA } from '../paleta.mjs';
 
 // bloques por octavos para puntas de cuerpos de velas
 const BLOCK8 = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
@@ -9,17 +8,6 @@ const BLOCK8 = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 // lineas verticales cortadas para las mechas
 const HALF_UP = '╵';
 const HALF_DOWN = '╷';
-
-// oscurece colores de vela manteniendo el hue, emulando alpha
-function bajarLuminosidad(hex, factor) {
-  const valor = parseInt(hex.slice(1), 16);
-  return '#' + [16, 8, 0]
-    .map(shift => Math.round(((valor >> shift) & 255) * factor).toString(16).padStart(2, '0'))
-    .join('');
-}
-
-const BOLLINGER_UPPER_BG = bajarLuminosidad(PALETA.success, 0.18);
-const BOLLINGER_LOWER_BG = bajarLuminosidad(PALETA.danger, 0.18);
 
 export function anchoPlot(width, showAxis = true) {
   const totalW = Math.max(1, Math.floor(width));
@@ -287,10 +275,10 @@ export function graficoVelas({
       // mantiene los valores de esta vela hasta la siguiente
       for (let fillCol = col; fillCol < nextCol && fillCol < plotW; fillCol++) {
         for (let row = upperRow; row < middleRow; row++) {
-          bandBackground[row][fillCol] = BOLLINGER_UPPER_BG;
+          bandBackground[row][fillCol] = 'successBg';
         }
         for (let row = middleRow; row <= lowerRow; row++) {
-          bandBackground[row][fillCol] = BOLLINGER_LOWER_BG;
+          bandBackground[row][fillCol] = 'dangerBg';
         }
       }
     }
