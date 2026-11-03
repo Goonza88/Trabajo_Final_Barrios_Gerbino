@@ -1,9 +1,10 @@
 // aritmetica decimal exacta para precios/cantidades/fees
-// escala 10^8 para cubrir la precision de binance
+// la precision se fija en DECIMALES - la escala y la validacion salen de ahi
 
-export const ESCALA = 100000000n;
+export const DECIMALES = 8;
+export const ESCALA = 10n ** BigInt(DECIMALES);
 
-const DECIMAL = /^\d+(\.\d{1,8})?$/;
+const DECIMAL = new RegExp(`^\\d+(\\.\\d{1,${DECIMALES}})?$`);
 
 function validar(str) {
   if (typeof str !== 'string' || !DECIMAL.test(str)) {
@@ -13,26 +14,18 @@ function validar(str) {
 }
 
 export function parse(str) {
-  const s = validar(str);
-  const i = s.indexOf('.');
-  if (i === -1) return BigInt(s) * ESCALA;
-  const entera = s.slice(0, i);
-  let frac = s.slice(i + 1);
-  if (frac.length > 8) frac = frac.slice(0, 8);
-  while (frac.length < 8) frac += '0';
-  const num = (entera === '' ? '0' : entera) + frac;
-  return BigInt(num);
+  const [entera, frac = ''] = validar(str).split('.');
+  return BigInt(entera + frac.padEnd(DECIMALES, '0'));
 }
 
 export function formatear(val) {
   if (typeof val !== 'bigint') val = BigInt(val);
   const neg = val < 0n;
-  let v = neg ? -val : val;
+  const v = neg ? -val : val;
   const entera = v / ESCALA;
-  let frac = v % ESCALA;
+  const frac = v % ESCALA;
   if (frac === 0n) return (neg ? '-' : '') + entera.toString();
-  let fstr = frac.toString().padStart(8, '0');
-  fstr = fstr.replace(/0+$/, '');
+  const fstr = frac.toString().padStart(DECIMALES, '0').replace(/0+$/, '');
   return (neg ? '-' : '') + entera.toString() + '.' + fstr;
 }
 
@@ -43,4 +36,12 @@ export function comparar(a, b) {
   if (x < y) return -1;
   if (x > y) return 1;
   return 0;
+}
+
+// multiplicacion y division truncan lo que pase de la constante, una vez por cuenta
+export function multiplicar(a, b) { return parse(a) * parse(b) / ESCALA; }
+export function dividir(a, b) {
+  const divisor = parse(b);
+  if (divisor === 0n) throw new Error('division por cero');
+  return parse(a) * ESCALA / divisor;
 }
