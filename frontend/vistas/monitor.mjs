@@ -7,7 +7,7 @@ import { sanitize } from '../../backend/terminal/ansi.mjs';
 import { boxSize } from '../../backend/terminal/layout.mjs';
 import { crearEstado } from '../estado/mercado.mjs';
 import { anchoPlot, graficoVelas, tablaVelas } from '../graficos/velas.mjs';
-import { anchoWatchlist, fmtPrecio, fmtVariacion, indiceTickers, vistaWatchlist } from '../features/watchlist.mjs';
+import { anchoWatchlist, fmtPrecio, fmtVariacion, vistaWatchlist } from '../features/watchlist.mjs';
 
 // ATAJOS ==========================================================================================
 
@@ -118,8 +118,7 @@ function capacidadZoom(estado, cols) {
 }
 
 export function cantidadVelasVisibles(estado, cols = size().cols) {
-  const zoomX = Math.max(1, Math.floor(estado.zoomX ?? 80));
-  return Math.min(zoomX, capacidadZoom(estado, cols));
+  return Math.min(estado.zoomX, capacidadZoom(estado, cols));
 }
 
 export function rangoVentanaVelas(total, cantidad, offset = 0) {
@@ -132,15 +131,10 @@ export function rangoVentanaVelas(total, cantidad, offset = 0) {
   return { inicio: Math.max(0, fin - count), fin };
 }
 
-export function ventanaVelas(velas, cantidad, offset = 0) {
-  const { inicio, fin } = rangoVentanaVelas(velas.length, cantidad, offset);
-  return velas.slice(inicio, fin);
-}
-
 // PANELES =========================================================================================
 
 function leyendaIndicadores(estado) {
-  const activos = estado.indicadores ?? {};
+  const activos = estado.indicadores;
   return INDICADORES
     .map(({ tecla, nombre, etiqueta }) => tecla + ':' + etiqueta(estado.series[nombre]) + (activos[nombre] ? '+' : '-'))
     .join(' ');
@@ -148,8 +142,7 @@ function leyendaIndicadores(estado) {
 
 // series de los indicadores activos, recortadas a la ventana visible
 function indicadoresVisibles(estado, inicio, fin) {
-  const { series } = estado;
-  const activos = estado.indicadores ?? {};
+  const { series, indicadores: activos } = estado;
   const recortar = valores => valores.slice(inicio, fin);
   return {
     sma: activos.sma ? recortar(series.sma.valores) : null,
@@ -176,10 +169,9 @@ function panelVelas(estado, width, height, visibleCount) {
   const error = estado.error ? sanitize(estado.error) : null;
   const { inicio, fin } = rangoVentanaVelas(estado.velas.length, visibleCount, estado.offset);
   const vis = estado.velas.slice(inicio, fin);
-  const ticker = indiceTickers(estado.tickers)[estado.symbol];
-  const precio = estado.ultimo ?? ticker?.price ?? null;
+  const precio = estado.ultimo ?? estado.tickers[estado.symbol]?.price;
   const cabecera = estado.symbol + ' ' + estado.interval + ' | ' + fmtPrecio(precio)
-    + ' | 24h:' + fmtVariacion(estado.variaciones[estado.symbol] ?? null)
+    + ' | 24h:' + fmtVariacion(estado.variaciones[estado.symbol])
     + ' | ' + fmtHora(estado.actualizado_en);
 
   const contenido = estado.modoTabla
@@ -187,11 +179,11 @@ function panelVelas(estado, width, height, visibleCount) {
     : graficoVelas({
       velas: vis,
       width: innerW,
-      height: Math.max(2, (innerH ?? height) - 4),
+      height: Math.max(2, innerH - 4),
       showAxis: true,
       interval: estado.interval,
       zoomY: estado.zoomY,
-      offsetY: estado.offsetY || 0,
+      offsetY: estado.offsetY,
       indicadores: indicadoresVisibles(estado, inicio, fin),
     });
 

@@ -5,9 +5,9 @@ import assert from 'node:assert/strict';
 import { flatten } from '../backend/terminal/view.mjs';
 import { sanitize, toAnsi } from '../backend/terminal/ansi.mjs';
 import { anchoPlot, graficoVelas, limitarVelas } from '../frontend/graficos/velas.mjs';
-import { capacidadVelas, cantidadVelasVisibles, lineasAyuda, ventanaVelas, vistaMonitor } from '../frontend/vistas/monitor.mjs';
+import { capacidadVelas, cantidadVelasVisibles, lineasAyuda, rangoVentanaVelas, vistaMonitor } from '../frontend/vistas/monitor.mjs';
+import { crearEstado } from '../frontend/estado/mercado.mjs';
 import { anchoWatchlist, vistaWatchlist } from '../frontend/features/watchlist.mjs';
-import { calcularIndicadores } from '../backend/dominio/indicadores.mjs';
 
 const BLOQUES = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 
@@ -269,50 +269,36 @@ test('la capacidad depende del ancho y modo tabla conserva ventana', () => {
 });
 
 test('la ventana muestra velas consecutivas', () => {
-  const fuente = velas(10);
-
-  assert.deepEqual(ventanaVelas(fuente, 4), fuente.slice(6));
-  assert.deepEqual(ventanaVelas(fuente, 4, 2), fuente.slice(4, 8));
-  assert.deepEqual(ventanaVelas(fuente, 4, 100), fuente.slice(0, 4));
+  assert.deepEqual(rangoVentanaVelas(10, 4), { inicio: 6, fin: 10 });
+  assert.deepEqual(rangoVentanaVelas(10, 4, 2), { inicio: 4, fin: 8 });
+  assert.deepEqual(rangoVentanaVelas(10, 4, 100), { inicio: 0, fin: 4 });
 });
 
 test('el monitor muestra velas consecutivas hasta el maximo que entra', () => {
   const estado = { zoomX: 80, intervalos: ['1m', '5m', '1h', '4h', '1d'] };
   const capacidad = cantidadVelasVisibles(estado, 80);
   const fuente = velas(capacidad * 2);
-  const visibles = ventanaVelas(fuente, capacidad);
+  const { inicio, fin } = rangoVentanaVelas(fuente.length, capacidad);
+  const visibles = fuente.slice(inicio, fin);
 
   assert.equal(visibles.length, capacidad);
   assert.equal(visibles.at(-1), fuente.at(-1));
   assert.ok(visibles.every((vela, i) => i === 0 || vela.open_time - visibles[i - 1].open_time === 60000));
 });
 
-test('vistaMonitor compone watchlist y grafico sin romper', () => {
-  const estado = {
-    symbol: 'BTCUSDT',
+test('vistaMonitor compone watchlist y grafico sin romper', async () => {
+  const { estado, cargar, cargarTickers } = crearEstado({
     simbolos: ['BTCUSDT', 'ETHUSDT'],
-    tickers: {
-      BTCUSDT: { symbol: 'BTCUSDT', price: '111', open_24h: '100' },
-      ETHUSDT: { symbol: 'ETHUSDT', price: '180', open_24h: '200' }
-    },
-    variaciones: { BTCUSDT: 11, ETHUSDT: -10 },
-    tickers_error: null,
-    cursor: 0,
-    foco: 'watchlist',
-    interval: '1m',
-    velas: velas(12),
-    series: calcularIndicadores(velas(12)),
-    error: null,
-    ultimo: '111',
-    actualizado_en: Date.now(),
-    zoomX: 12,
-    offset: 0,
-    zoomY: 1,
-    offsetY: 0,
-    precision: false,
-    modoTabla: false,
-    intervalos: ['1m', '5m', '1h', '4h', '1d'],
-  };
+    cargarVelas: async () => velas(12),
+    cargarTickers: async () => [
+      { symbol: 'BTCUSDT', price: '111', open_24h: '100' },
+      { symbol: 'ETHUSDT', price: '180', open_24h: '200' }
+    ]
+  });
+  await Promise.all([cargar(), cargarTickers()]);
+  estado.foco = 'watchlist';
+  estado.zoomX = 12;
+
   const lineas = flatten(vistaMonitor(estado), 80, 24);
   const texto = sanitize(lineas.map(linea => linea.content).join('\n'));
   assert.match(texto, /watchlist/);
@@ -320,7 +306,8 @@ test('vistaMonitor compone watchlist y grafico sin romper', () => {
   assert.match(texto, /ETHUSDT/);
   assert.match(texto, /\+11\.00%/);
   assert.match(texto, /-10\.00%/);
-  assert.doesNotThrow(() => flatten(vistaMonitor({ ...estado, tickers: Object.values(estado.tickers), foco: 'grafico', modoTabla: true }), 80, 24));
+  estado.modoTabla = true;
+  assert.doesNotThrow(() => flatten(vistaMonitor(estado), 80, 24));
 });
 
 test('el monitor arma una ayuda por atajo y la watchlist calcula el ancho para no cortarlas', () => {

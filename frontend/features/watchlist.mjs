@@ -16,24 +16,13 @@ export function fmtVariacion(valor) {
   return (valor > 0 ? '+' : '') + valor.toFixed(2) + '%';
 }
 
-export function indiceTickers(tickers) {
-  if (Array.isArray(tickers)) {
-    const indice = {};
-    for (const ticker of tickers) {
-      if (ticker?.symbol) indice[ticker.symbol] = ticker;
-    }
-    return indice;
-  }
-  return tickers || {};
-}
-
 // ancho minimo para que ninguna linea se corte ni haga wrap
 export function anchoWatchlist(ayuda = []) {
   return Math.max(30, ...ayuda.map(linea => textWidth(linea) + 4));
 }
 
 // la watchlist es el ticker - al final muestra las lineas de ayuda que le pasa la vista
-export function vistaWatchlist(estado, { width = 26, height = 10, ayuda = [] } = {}) {
+export function vistaWatchlist(estado, { width, height, ayuda }) {
   const marco = {
     border: 'round',
     pad: [0, 1],
@@ -41,14 +30,10 @@ export function vistaWatchlist(estado, { width = 26, height = 10, ayuda = [] } =
     borderStyle: estado.foco === 'watchlist' ? { fg: 'accent' } : null
   };
   const { innerH } = boxSize(marco, width);
-  const simbolos = Array.isArray(estado.simbolos) && estado.simbolos.length
-    ? estado.simbolos
-    : [estado.symbol].filter(Boolean);
-  const tickers = indiceTickers(estado.tickers);
-  const cursor = Math.max(0, Math.min(estado.cursor ?? 0, Math.max(0, simbolos.length - 1)));
+  const { simbolos, tickers, cursor } = estado;
   const ayudasCompactas = ayuda.filter(linea => linea !== '');
   const error = estado.tickers_error ? sanitize(estado.tickers_error) : null;
-  const alto = innerH ?? height;
+  const alto = innerH;
   const extraError = error ? 1 : 0;
   const cabeCompleta = alto >= 4 + 1 + ayuda.length + extraError;
   const cabeCompacta = alto >= 4 + 1 + ayudasCompactas.length + extraError;
@@ -61,7 +46,7 @@ export function vistaWatchlist(estado, { width = 26, height = 10, ayuda = [] } =
   const visibles = maxFilas > 0 ? simbolos.slice(inicio, inicio + maxFilas) : [];
   const filas = visibles.map((symbol, i) => {
     const ticker = tickers[symbol];
-    const valor = estado.variaciones[symbol] ?? null;
+    const valor = estado.variaciones[symbol];
     const estiloValor = valor == null || valor === 0 ? null : { fg: valor > 0 ? 'success' : 'danger' };
     const estiloFila = inicio + i === cursor ? { fg: 'accent' } : null;
     return [

@@ -9,10 +9,14 @@ const BLOCK8 = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 const HALF_UP = '╵';
 const HALF_DOWN = '╷';
 
+// columnas del eje de precios a la izquierda del grafico
+function anchoEje(totalW, showAxis) {
+  return showAxis ? Math.min(9, Math.max(0, totalW - 1)) : 0;
+}
+
 export function anchoPlot(width, showAxis = true) {
   const totalW = Math.max(1, Math.floor(width));
-  const axisW = showAxis ? Math.min(9, Math.max(0, totalW - 1)) : 0;
-  return Math.max(1, totalW - axisW);
+  return Math.max(1, totalW - anchoEje(totalW, showAxis));
 }
 
 // las mismas velas en una tabla, la mas reciente arriba
@@ -121,7 +125,7 @@ export function graficoVelas({
   }
 
   const totalW = Math.max(1, Math.floor(width));
-  const axisW = showAxis ? Math.min(9, Math.max(0, totalW - 1)) : 0;
+  const axisW = anchoEje(totalW, showAxis);
   const plotW = anchoPlot(totalW, showAxis);
   const totalH = Math.max(showAxis ? 2 : 1, Math.floor(height));
   const timeAxisH = showAxis ? 1 : 0;
@@ -187,7 +191,7 @@ export function graficoVelas({
   lmin = lmin - (span - (lmax - lmin)) / 2 + offY;
   lmax = lmin + span;
   if (lmax - lmin < 1e-12) { lmin -= 0.001; lmax += 0.001; }
-  const lrange = lmax - lmin || 1;
+  const lrange = lmax - lmin;
   const py = (v) => ((lmax - toLog(v)) / lrange) * (plotH - 1);
   const colForIndex = (i) => {
     if (velas.length <= 1) return Math.floor(plotW / 2);
@@ -195,13 +199,11 @@ export function graficoVelas({
   };
 
   const labels = [];
-  const xg = [];
 
   function fmtTime(ts) {
     const d = new Date(ts);
     if (interval === '1d') return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
-    if (interval === '4h') return d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    if (interval === '1h') return d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    if (interval === '4h' || interval === '1h') return d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
   }
 
@@ -224,22 +226,20 @@ export function graficoVelas({
         stepMs = steps[i];
       }
     }
-    const align = stepMs;
-    let t = Math.floor(t0 / align) * align;
-    while (t <= t1 + align) {
+    let t = Math.floor(t0 / stepMs) * stepMs;
+    while (t <= t1 + stepMs) {
       let bestI = 0, bestD = Infinity;
       for (let i = 0; i < velas.length; i++) {
         const d = Math.abs(velas[i].open_time - t);
         if (d < bestD) { bestD = d; bestI = i; }
       }
-      if (bestD <= align * 0.6) {
+      if (bestD <= stepMs * 0.6) {
         const c = colForIndex(bestI);
-        if (c >= 0 && c < plotW && !xg.some(x => Math.abs(x - c) < 1)) {
-          xg.push(c);
+        if (c >= 0 && c < plotW && !labels.some(label => label.i === c)) {
           labels.push({ i: c, t: fmtTime(t) });
         }
       }
-      t += align;
+      t += stepMs;
     }
   }
 
@@ -247,13 +247,10 @@ export function graficoVelas({
     const mid = Math.floor(velas.length / 2);
     const c = colForIndex(mid);
     labels.push({ i: c, t: fmtTime(velas[mid].open_time) });
-    xg.push(c);
   }
 
-  xg.sort((a, b) => a - b);
   labels.sort((a, b) => a.i - b.i);
-  const xlabelsSet = new Set(labels.map(l => l.i));
-  const xgridSet = new Set(xg);
+  const columnasEtiqueta = new Set(labels.map(l => l.i));
 
   const plot = Array.from({ length: plotH }, () => Array(plotW).fill(null));
   const bandBackground = Array.from({ length: plotH }, () => Array(plotW).fill(null));
@@ -620,7 +617,7 @@ export function graficoVelas({
     for (let c = 0; c < plotW; c++) {
       let cell = plot[r][c];
       if (!cell) {
-        if (xgridSet.has(c)) cell = { ch: '·', style: { fg: xlabelsSet.has(c) ? 'sec' : 'reader' } };
+        if (columnasEtiqueta.has(c)) cell = { ch: '·', style: { fg: 'sec' } };
         else if (ygrid.has(r)) cell = { ch: '·', style: { fg: 'reader' } };
       }
       const bg = bandBackground[r][c];

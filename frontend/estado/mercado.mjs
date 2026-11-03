@@ -6,6 +6,11 @@ import { calcularIndicadores, calcularVariacion } from '../../backend/dominio/in
 // limites del zoom horizontal, en velas visibles
 const ZOOM_X = Object.freeze({ min: 20, max: 160, paso: 5 });
 
+// zoom vertical - paso libre y pasos de precision, sus extremos son los limites
+const ZOOM_Y = Object.freeze({ paso: 0.1, pasos: Object.freeze([0.4, 0.5, 0.6, 0.8, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0]) });
+const ZOOM_Y_MIN = ZOOM_Y.pasos[0];
+const ZOOM_Y_MAX = ZOOM_Y.pasos.at(-1);
+
 export function crearEstado({
   symbol = 'BTCUSDT',
   simbolos = [symbol],
@@ -45,64 +50,78 @@ export function crearEstado({
     precision: false,
     modoTabla: false,
     indicadores: { sma: false, ema: false, rsi: false, volume: false, bollinger: true },
-    zoomYBeforePrecision: null,
-    zoomYSnap: [0.4, 0.5, 0.6, 0.8, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0]
+    zoomYBeforePrecision: null
   };
 
-  let carga = 0;
-  let abortar = null;
-  let enCurso = null;
-  let cargaTickers = 0;
-  let abortarTickers = null;
-  let enCursoTickers = null;
+  // carga en segundo plano - la nueva cancela a la anterior y una respuesta vieja no pisa a la nueva
+  // con reemplazar en false reusa la que esta en curso
+  function crearCarga(pedir, aplicar, fallar) {
+    let ultima = 0;
+    let abortar = null;
+    let enCurso = null;
 
-  async function ejecutarCarga(control, id) {
-    try {
-      const norm = await cargarVelas({
-        exchange_id: estado.exchange_id,
-        symbol: estado.symbol,
-        interval: estado.interval,
-        limit: estado.limite,
-        signal: control.signal
+    async function ejecutar(control, id) {
+      const vigente = () => id === ultima && !control.signal.aborted;
+      try {
+        const datos = await pedir(control.signal);
+        if (vigente()) aplicar(datos);
+      } catch (e) {
+        if (vigente()) fallar(e);
+      } finally {
+        if (abortar === control) abortar = null;
+      }
+      return estado;
+    }
+
+    function cargar({ reemplazar = true } = {}) {
+      if (!reemplazar && enCurso) return enCurso;
+      abortar?.abort();
+      const control = new AbortController();
+      abortar = control;
+      const promesa = ejecutar(control, ++ultima);
+      enCurso = promesa;
+      promesa.finally(() => {
+        if (enCurso === promesa) enCurso = null;
       });
-      if (id !== carga || control.signal.aborted) return estado;
+      return promesa;
+    }
+
+    function cancelar() {
+      ultima++;
+      abortar?.abort();
+      abortar = null;
+      enCurso = null;
+    }
+
+    return { cargar, cancelar };
+  }
+
+  const velas = crearCarga(
+    signal => cargarVelas({
+      exchange_id: estado.exchange_id,
+      symbol: estado.symbol,
+      interval: estado.interval,
+      limit: estado.limite,
+      signal
+    }),
+    norm => {
       estado.velas = norm;
       estado.series = calcularIndicadores(norm);
       const last = estado.velas[estado.velas.length - 1];
       estado.ultimo = last ? last.close : null;
       estado.actualizado_en = Date.now();
       estado.error = null;
-      return estado;
-    } catch (e) {
-      if (id === carga && !control.signal.aborted) estado.error = e.message;
-      return estado;
-    } finally {
-      if (abortar === control) abortar = null;
-    }
-  }
+    },
+    e => { estado.error = e.message; }
+  );
 
-  function cargar({ reemplazar = true } = {}) {
-    if (!reemplazar && enCurso) return enCurso;
-    abortar?.abort();
-    const control = new AbortController();
-    abortar = control;
-    const id = ++carga;
-    const promesa = ejecutarCarga(control, id);
-    enCurso = promesa;
-    promesa.finally(() => {
-      if (enCurso === promesa) enCurso = null;
-    });
-    return promesa;
-  }
-
-  async function ejecutarCargaTickers(control, id) {
-    try {
-      const norm = await cargarTickersFn({
-        exchange_id: estado.exchange_id,
-        symbols: estado.simbolos,
-        signal: control.signal
-      });
-      if (id !== cargaTickers || control.signal.aborted) return estado;
+  const tickers = crearCarga(
+    signal => cargarTickersFn({
+      exchange_id: estado.exchange_id,
+      symbols: estado.simbolos,
+      signal
+    }),
+    norm => {
       const mapa = {};
       const variaciones = {};
       for (const ticker of norm || []) {
@@ -114,38 +133,16 @@ export function crearEstado({
       estado.variaciones = variaciones;
       estado.tickers_error = null;
       estado.tickers_actualizado_en = Date.now();
-      return estado;
-    } catch (e) {
-      if (id === cargaTickers && !control.signal.aborted) estado.tickers_error = e.message;
-      return estado;
-    } finally {
-      if (abortarTickers === control) abortarTickers = null;
-    }
-  }
+    },
+    e => { estado.tickers_error = e.message; }
+  );
 
-  function cargarTickers({ reemplazar = true } = {}) {
-    if (!reemplazar && enCursoTickers) return enCursoTickers;
-    abortarTickers?.abort();
-    const control = new AbortController();
-    abortarTickers = control;
-    const id = ++cargaTickers;
-    const promesa = ejecutarCargaTickers(control, id);
-    enCursoTickers = promesa;
-    promesa.finally(() => {
-      if (enCursoTickers === promesa) enCursoTickers = null;
-    });
-    return promesa;
-  }
+  const cargar = velas.cargar;
+  const cargarTickers = tickers.cargar;
 
   function cancelar() {
-    carga++;
-    abortar?.abort();
-    abortar = null;
-    enCurso = null;
-    cargaTickers++;
-    abortarTickers?.abort();
-    abortarTickers = null;
-    enCursoTickers = null;
+    velas.cancelar();
+    tickers.cancelar();
   }
 
   async function setIntervalo(i) {
@@ -207,7 +204,7 @@ export function crearEstado({
 
   function zoomV(dir) {
     if (estado.precision) {
-      const list = estado.zoomYSnap;
+      const list = ZOOM_Y.pasos;
       const idx = list.findIndex(v => Math.abs(v - estado.zoomY) < 1e-6);
       if (dir === '+') {
         const next = idx <= 0 ? 0 : idx - 1;
@@ -218,8 +215,8 @@ export function crearEstado({
       }
       return;
     }
-    if (dir === '+') estado.zoomY = Math.max(0.4, estado.zoomY - 0.1);
-    if (dir === '-') estado.zoomY = Math.min(3, estado.zoomY + 0.1);
+    if (dir === '+') estado.zoomY = Math.max(ZOOM_Y_MIN, estado.zoomY - ZOOM_Y.paso);
+    if (dir === '-') estado.zoomY = Math.min(ZOOM_Y_MAX, estado.zoomY + ZOOM_Y.paso);
   }
 
   // la precision fija el zoom vertical al paso mas cercano y al salir vuelve al zoom previo
@@ -232,7 +229,7 @@ export function crearEstado({
     }
     estado.zoomYBeforePrecision = estado.zoomY;
     estado.precision = true;
-    estado.zoomY = estado.zoomYSnap.reduce((mejor, paso) =>
+    estado.zoomY = ZOOM_Y.pasos.reduce((mejor, paso) =>
       Math.abs(paso - estado.zoomY) < Math.abs(mejor - estado.zoomY) ? paso : mejor);
   }
 
