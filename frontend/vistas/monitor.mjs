@@ -13,13 +13,13 @@ import { anchoWatchlist, fmtPrecio, fmtVariacion, vistaWatchlist } from '../feat
 
 const TECLAS_INTERVALO = ['a', 's', 'd', 'f', 'g'];
 
-// cada indicador con su tecla y su etiqueta, con los parametros que trae la serie
+// cada indicador con su tecla, su nombre en la ayuda y su etiqueta con los parametros de la serie
 const INDICADORES = [
-  { tecla: '1', nombre: 'sma', etiqueta: serie => 'SMA' + serie.periodo },
-  { tecla: '2', nombre: 'ema', etiqueta: serie => 'EMA' + serie.periodo },
-  { tecla: '3', nombre: 'rsi', etiqueta: serie => 'RSI' + serie.periodo },
-  { tecla: '4', nombre: 'volume', etiqueta: () => 'VOL' },
-  { tecla: '5', nombre: 'bollinger', etiqueta: serie => 'BB' + serie.periodo + 'x' + serie.desviaciones },
+  { tecla: '1', nombre: 'sma', titulo: 'Media Simple', etiqueta: serie => 'SMA' + serie.periodo },
+  { tecla: '2', nombre: 'ema', titulo: 'Media Exponencial', etiqueta: serie => 'EMA' + serie.periodo },
+  { tecla: '3', nombre: 'rsi', titulo: 'RSI', etiqueta: serie => 'RSI' + serie.periodo },
+  { tecla: '4', nombre: 'volume', titulo: 'Volumen', etiqueta: () => 'VOL' },
+  { tecla: '5', nombre: 'bollinger', titulo: 'Bandas de Bollinger', etiqueta: serie => 'BB' + serie.periodo + 'x' + serie.desviaciones },
 ];
 
 // vuelve a pintar cuando termina una carga en segundo plano
@@ -32,18 +32,23 @@ const enGrafico = accion => monitor => {
   if (monitor.estado.foco === 'grafico') accion(monitor);
 };
 
-// atajos - cada uno con sus teclas, su ayuda y su accion
+// rango de teclas para la ayuda resumida de una seccion, como 'h-l'
+const rango = teclas => teclas[0] + '-' + teclas.at(-1);
+
+// atajos por seccion - cada uno con sus teclas, su ayuda y su accion, y la seccion con su resumen
+// si la ayuda puede plegarse a una sola linea
 function atajos(intervalos = []) {
+  const teclasIntervalo = TECLAS_INTERVALO.slice(0, intervalos.length);
   return [
-    [
+    { atajos: [
       { teclas: ['Enter'], ayuda: 'Enter - Seleccionar', accion: monitor => {
         if (monitor.estado.foco !== 'watchlist') return;
         monitor.setFoco('grafico');
         alTerminarCarga(monitor.seleccionarCursor());
       } },
       { teclas: ['Tab'], ayuda: 'Tab - Cambiar Foco', accion: monitor => monitor.alternarFoco() },
-    ],
-    [
+    ] },
+    { resumen: 'h-l - Desplazar', atajos: [
       { teclas: ['h', 'ArrowLeft'], ayuda: 'h - Izquierda', accion: enGrafico(monitor => monitor.mover('h', cantidadVelasVisibles(monitor.estado))) },
       { teclas: ['j', 'ArrowDown'], ayuda: 'j - Abajo', accion: monitor => {
         if (monitor.estado.foco === 'watchlist') monitor.moverCursor(1);
@@ -54,41 +59,43 @@ function atajos(intervalos = []) {
         else monitor.mover('k');
       } },
       { teclas: ['l', 'ArrowRight'], ayuda: 'l - Derecha', accion: enGrafico(monitor => monitor.mover('l', cantidadVelasVisibles(monitor.estado))) },
-    ],
-    [
+    ] },
+    { resumen: 'y-o - Zoom', atajos: [
       { teclas: ['y'], ayuda: 'y - Alejar Horizontal', accion: enGrafico(monitor => monitor.zoomH('-', capacidadZoom(monitor.estado))) },
       { teclas: ['u'], ayuda: 'u - Alejar Vertical', accion: enGrafico(monitor => monitor.zoomV('-')) },
       { teclas: ['i'], ayuda: 'i - Acercar Vertical', accion: enGrafico(monitor => monitor.zoomV('+')) },
       { teclas: ['o'], ayuda: 'o - Acercar Horizontal', accion: enGrafico(monitor => monitor.zoomH('+', capacidadZoom(monitor.estado))) },
-    ],
-    [
+    ] },
+    { atajos: [
       { teclas: ['t'], ayuda: 't - Vista de Tabla', accion: monitor => monitor.alternarTabla() },
-      { teclas: ['p'], ayuda: 'p - Vista de Precision', accion: monitor => monitor.alternarPrecision() },
-    ],
-    intervalos.slice(0, TECLAS_INTERVALO.length).map((intervalo, i) => ({
-      teclas: [TECLAS_INTERVALO[i]],
-      ayuda: TECLAS_INTERVALO[i] + ' - Intervalo ' + intervalo,
-      accion: monitor => alTerminarCarga(monitor.setIntervalo(intervalo)),
-    })),
-    INDICADORES.map(({ tecla, nombre }) => ({
+    ] },
+    { resumen: rango(teclasIntervalo) + ' - Intervalos', atajos: teclasIntervalo.map((tecla, i) => ({
       teclas: [tecla],
+      ayuda: tecla + ' - Intervalo ' + intervalos[i],
+      accion: monitor => alTerminarCarga(monitor.setIntervalo(intervalos[i])),
+    })) },
+    { resumen: rango(INDICADORES.map(({ tecla }) => tecla)) + ' - Indicadores', atajos: INDICADORES.map(({ tecla, nombre, titulo }) => ({
+      teclas: [tecla],
+      ayuda: tecla + ' - ' + titulo,
       accion: monitor => monitor.alternarIndicador(nombre),
-    })),
-    [
+    })) },
+    { atajos: [
       { teclas: ['q'], ayuda: 'q - Volver', accion: monitor => {
         monitor.cancelar();
         monitor.salir();
       } },
-    ],
+    ] },
   ];
 }
 
-// una linea por atajo con ayuda, linea vacia entre secciones
-export function lineasAyuda(intervalos) {
+// la ayuda por seccion - sus lineas, y el resumen si tiene mas de una linea para plegar
+export function seccionesAyuda(intervalos) {
   return atajos(intervalos)
-    .map(seccion => seccion.filter(atajo => atajo.ayuda).map(atajo => atajo.ayuda))
-    .filter(seccion => seccion.length)
-    .flatMap((seccion, i) => i === 0 ? seccion : ['', ...seccion]);
+    .filter(seccion => seccion.atajos.length)
+    .map(({ resumen, atajos }) => ({
+      lineas: atajos.map(atajo => atajo.ayuda),
+      resumen: atajos.length > 1 ? resumen : undefined,
+    }));
 }
 
 // MEDIDAS =========================================================================================
@@ -99,7 +106,7 @@ function fmtHora(ts) {
 }
 
 function dimensiones(estado, cols) {
-  const watchW = Math.max(anchoWatchlist(lineasAyuda(estado.intervalos)), Math.min(32, Math.floor(cols * 0.38)));
+  const watchW = Math.max(anchoWatchlist(seccionesAyuda(estado.intervalos)), Math.min(32, Math.floor(cols * 0.38)));
   const chartW = Math.max(1, cols - watchW - 1);
   return { watchW, chartW };
 }
@@ -204,7 +211,7 @@ export function vistaMonitor(estado) {
     sizes: [watchW, null],
     gap: 1,
     children: [
-      vistaWatchlist(estado, { width: watchW, height, ayuda: lineasAyuda(estado.intervalos) }),
+      vistaWatchlist(estado, { width: watchW, height, ayuda: seccionesAyuda(estado.intervalos) }),
       panelVelas(estado, chartW, height, cantidadVelasVisibles(estado, cols))
     ]
   });
@@ -226,7 +233,7 @@ export function crearMonitor({ salir, sondeoMs = 5000, ...opciones }) {
     subscriptions: [Sub.interval(sondeoMs, 'poll')],
     update: (model, event) => {
       if (event.type === 'key') {
-        const atajo = atajos(estado.intervalos).flat().find(a => a.teclas.includes(event.key));
+        const atajo = atajos(estado.intervalos).flatMap(seccion => seccion.atajos).find(a => a.teclas.includes(event.key));
         atajo?.accion(monitor);
         return estado;
       }

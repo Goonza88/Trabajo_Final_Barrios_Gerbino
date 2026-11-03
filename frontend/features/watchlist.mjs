@@ -16,12 +16,26 @@ export function fmtVariacion(valor) {
   return (valor > 0 ? '+' : '') + valor.toFixed(2) + '%';
 }
 
-// ancho minimo para que ninguna linea se corte ni haga wrap
+// ancho minimo para que ninguna linea de ayuda se corte ni haga wrap, plegada o no
 export function anchoWatchlist(ayuda = []) {
-  return Math.max(30, ...ayuda.map(linea => textWidth(linea) + 4));
+  const lineas = ayuda.flatMap(({ lineas, resumen }) => resumen ? [...lineas, resumen] : lineas);
+  return Math.max(30, ...lineas.map(linea => textWidth(linea) + 4));
 }
 
-// la watchlist es el ticker - al final muestra las lineas de ayuda que le pasa la vista
+// formas de la ayuda de la mas larga a la mas corta - primero sin lineas vacias entre secciones,
+// despues plegando las secciones a su resumen de arriba hacia abajo
+function formasAyuda(secciones) {
+  const armar = (plegadas, separar) => {
+    let resto = plegadas;
+    return secciones
+      .map(({ lineas, resumen }) => resumen && resto-- > 0 ? [resumen] : lineas)
+      .flatMap((bloque, i) => separar && i > 0 ? ['', ...bloque] : bloque);
+  };
+  const plegables = secciones.filter(seccion => seccion.resumen).length;
+  return [armar(0, true), ...Array.from({ length: plegables + 1 }, (_, k) => armar(k, false))];
+}
+
+// la watchlist es el ticker - al final muestra la ayuda por secciones que le pasa la vista
 export function vistaWatchlist(estado, { width, height, ayuda }) {
   const marco = {
     border: 'round',
@@ -31,14 +45,14 @@ export function vistaWatchlist(estado, { width, height, ayuda }) {
   };
   const { innerH } = boxSize(marco, width);
   const { simbolos, tickers, cursor } = estado;
-  const ayudasCompactas = ayuda.filter(linea => linea !== '');
   const error = estado.tickers_error ? sanitize(estado.tickers_error) : null;
   const alto = innerH;
   const extraError = error ? 1 : 0;
-  const cabeCompleta = alto >= 4 + 1 + ayuda.length + extraError;
-  const cabeCompacta = alto >= 4 + 1 + ayudasCompactas.length + extraError;
-  const conSeparacion = cabeCompleta || cabeCompacta;
-  const ayudas = cabeCompleta ? ayuda : ayudasCompactas;
+  // la ayuda se achica hasta que entren todos los simbolos, y si ni plegada entran, la lista se desplaza
+  const formas = formasAyuda(ayuda);
+  const ayudas = formas.find(forma => alto >= 4 + Math.max(1, simbolos.length) + forma.length + extraError)
+    ?? formas.at(-1);
+  const conSeparacion = alto >= 4 + 1 + ayudas.length + extraError;
   const overhead = conSeparacion ? 4 : 2;
   const maxFilas = Math.max(0, alto - overhead - ayudas.length - extraError);
   const maxInicio = Math.max(0, simbolos.length - maxFilas);

@@ -323,19 +323,17 @@ test('cargarTickers deja la variacion de 24h de cada simbolo', async () => {
   assert.equal(Math.round(estado.variaciones.ETHUSDT), -10);
 });
 
-test('precision fija el zoom vertical al paso mas cercano y al salir vuelve al previo', () => {
-  const { estado, alternarPrecision, zoomV } = crearEstado({ cargarVelas: async () => [] });
-  estado.zoomY = 1.3;
-
-  alternarPrecision();
-  assert.equal(estado.precision, true);
-  assert.equal(estado.zoomY, 1.25);
+test('el zoom vertical avanza por pasos y respeta sus limites', () => {
+  const { estado, zoomV } = crearEstado({ cargarVelas: async () => [] });
   zoomV('-');
-  assert.equal(estado.zoomY, 1.5, 'con precision el zoom avanza por pasos');
+  assert.equal(estado.zoomY, 1.1);
 
-  alternarPrecision();
-  assert.equal(estado.precision, false);
-  assert.equal(estado.zoomY, 1.3);
+  estado.zoomY = 2.95;
+  zoomV('-');
+  assert.equal(estado.zoomY, 3.0);
+  estado.zoomY = 0.45;
+  zoomV('+');
+  assert.equal(estado.zoomY, 0.4);
 });
 
 test('modo tabla se alterna y reiniciarVista vuelve al grafico', () => {

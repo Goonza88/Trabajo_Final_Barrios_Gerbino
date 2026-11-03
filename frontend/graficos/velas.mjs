@@ -33,16 +33,21 @@ export function anchoPlot(width, showAxis = true) {
   return Math.max(1, totalW - anchoEje(totalW, showAxis));
 }
 
-// las mismas velas en una tabla, la mas reciente arriba
+// volumen con la parte entera en al menos dos digitos, para que 9.5 quede como 09.5
+function fmtVolumen(valor) {
+  const [entera, ...decimales] = String(valor).split('.');
+  return [entera.padStart(2, '0'), ...decimales].join('.');
+}
+
+// las mismas velas en una tabla, la mas reciente arriba - los valores van del color de la vela
 export function tablaVelas(velas) {
-  const filas = velas.slice().reverse().map(v => [
-    new Date(v.open_time).toLocaleTimeString('es-AR'),
-    v.open,
-    v.high,
-    v.low,
-    v.close,
-    v.volume
-  ]);
+  const filas = velas.slice().reverse().map(v => {
+    const style = { fg: Number(v.close) >= Number(v.open) ? 'success' : 'danger' };
+    return [
+      new Date(v.open_time).toLocaleTimeString('es-AR'),
+      ...[v.open, v.high, v.low, v.close, fmtVolumen(v.volume)].map(text => ({ text, style })),
+    ];
+  });
   return table({ headers: ['hora', 'open', 'high', 'low', 'close', 'vol'], rows: filas, fill: true, align: 'center' });
 }
 

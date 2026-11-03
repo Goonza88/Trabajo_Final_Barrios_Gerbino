@@ -4,8 +4,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { flatten } from '../backend/terminal/view.mjs';
 import { sanitize, toAnsi } from '../backend/terminal/ansi.mjs';
-import { anchoPlot, graficoVelas, limitarVelas } from '../frontend/graficos/velas.mjs';
-import { capacidadVelas, cantidadVelasVisibles, lineasAyuda, rangoVentanaVelas, vistaMonitor } from '../frontend/vistas/monitor.mjs';
+import { anchoPlot, graficoVelas, limitarVelas, tablaVelas } from '../frontend/graficos/velas.mjs';
+import { capacidadVelas, cantidadVelasVisibles, rangoVentanaVelas, seccionesAyuda, vistaMonitor } from '../frontend/vistas/monitor.mjs';
 import { crearEstado } from '../frontend/estado/mercado.mjs';
 import { anchoWatchlist, vistaWatchlist } from '../frontend/features/watchlist.mjs';
 
@@ -300,41 +300,26 @@ test('vistaMonitor compone watchlist y grafico sin romper', async () => {
   assert.doesNotThrow(() => flatten(vistaMonitor(estado), 80, 24));
 });
 
-test('el monitor arma una ayuda por atajo y la watchlist calcula el ancho para no cortarlas', () => {
-  const ayudas = lineasAyuda(['1m', '5m', '1h', '4h', '1d']);
-  assert.deepEqual(ayudas, [
-    'Enter - Seleccionar',
-    'Tab - Cambiar Foco',
-    '',
-    'h - Izquierda',
-    'j - Abajo',
-    'k - Arriba',
-    'l - Derecha',
-    '',
-    'y - Alejar Horizontal',
-    'u - Alejar Vertical',
-    'i - Acercar Vertical',
-    'o - Acercar Horizontal',
-    '',
-    't - Vista de Tabla',
-    'p - Vista de Precision',
-    '',
-    'a - Intervalo 1m',
-    's - Intervalo 5m',
-    'd - Intervalo 1h',
-    'f - Intervalo 4h',
-    'g - Intervalo 1d',
-    '',
-    'q - Volver'
+test('el monitor arma la ayuda por secciones y la watchlist calcula el ancho para no cortarlas', () => {
+  const secciones = seccionesAyuda(['1m', '5m', '1h', '4h', '1d']);
+  assert.deepEqual(secciones, [
+    { lineas: ['Enter - Seleccionar', 'Tab - Cambiar Foco'], resumen: undefined },
+    { lineas: ['h - Izquierda', 'j - Abajo', 'k - Arriba', 'l - Derecha'], resumen: 'h-l - Desplazar' },
+    { lineas: ['y - Alejar Horizontal', 'u - Alejar Vertical', 'i - Acercar Vertical', 'o - Acercar Horizontal'], resumen: 'y-o - Zoom' },
+    { lineas: ['t - Vista de Tabla'], resumen: undefined },
+    { lineas: ['a - Intervalo 1m', 's - Intervalo 5m', 'd - Intervalo 1h', 'f - Intervalo 4h', 'g - Intervalo 1d'], resumen: 'a-g - Intervalos' },
+    { lineas: ['1 - Media Simple', '2 - Media Exponencial', '3 - RSI', '4 - Volumen', '5 - Bandas de Bollinger'], resumen: '1-5 - Indicadores' },
+    { lineas: ['q - Volver'], resumen: undefined },
   ]);
-  const ancho = anchoWatchlist(ayudas);
-  assert.ok(ancho >= Math.max(...ayudas.map(linea => linea.length)) + 4);
+  const ancho = anchoWatchlist(secciones);
+  const lineas = secciones.flatMap(seccion => seccion.lineas);
+  assert.ok(ancho >= Math.max(...lineas.map(linea => linea.length)) + 4);
 });
 
-test('watchlist pega las ayudas al fondo y colorea la variacion 24h', () => {
-  const estado = {
-    symbol: 'BTCUSDT',
-    simbolos: ['BTCUSDT', 'ETHUSDT'],
+function estadoWatchlist(simbolos) {
+  return {
+    symbol: simbolos[0],
+    simbolos,
     tickers: {
       BTCUSDT: { symbol: 'BTCUSDT', price: '111', open_24h: '100' },
       ETHUSDT: { symbol: 'ETHUSDT', price: '180', open_24h: '200' }
@@ -345,12 +330,37 @@ test('watchlist pega las ayudas al fondo y colorea la variacion 24h', () => {
     foco: 'watchlist',
     intervalos: ['1m', '5m', '1h', '4h', '1d']
   };
-  const ayuda = lineasAyuda(estado.intervalos);
-  const ancho = anchoWatchlist(ayuda);
-  const lineas = flatten(vistaWatchlist(estado, { width: ancho, height: 24, ayuda }), ancho, 24);
-  const texto = lineas.map(linea => sanitize(linea.content));
+}
 
-  for (const linea of ayuda.filter(Boolean)) {
+function textoWatchlist(estado, alto) {
+  const ayuda = seccionesAyuda(estado.intervalos);
+  const ancho = anchoWatchlist(ayuda);
+  const lineas = flatten(vistaWatchlist(estado, { width: ancho, height: alto, ayuda }), ancho, alto);
+  return { lineas, texto: lineas.map(linea => sanitize(linea.content)) };
+}
+
+test('la ayuda pliega sus secciones de arriba hacia abajo hasta que entran todos los simbolos', () => {
+  const muchos = Array.from({ length: 10 }, (_, i) => 'SIM' + i + 'USDT');
+  const { texto } = textoWatchlist(estadoWatchlist(muchos), 32);
+
+  assert.ok(muchos.every(symbol => texto.some(t => t.includes(symbol))), 'entran todos los simbolos');
+  assert.ok(texto.some(t => t.includes('h-l - Desplazar')));
+  assert.ok(texto.some(t => t.includes('y-o - Zoom')));
+  assert.ok(texto.some(t => t.includes('a - Intervalo 1m')), 'los intervalos siguen completos');
+  assert.ok(!texto.some(t => t.includes('h - Izquierda')));
+  assert.ok(texto.some(t => t.includes('Enter - Seleccionar')) && texto.some(t => t.includes('t - Vista de Tabla')));
+
+  const todos = Array.from({ length: 40 }, (_, i) => 'SIM' + i + 'USDT');
+  const plegada = textoWatchlist(estadoWatchlist(todos), 32).texto;
+  for (const resumen of ['h-l - Desplazar', 'y-o - Zoom', 'a-g - Intervalos', '1-5 - Indicadores']) {
+    assert.ok(plegada.some(t => t.includes(resumen)), 'falta el resumen: ' + resumen);
+  }
+});
+
+test('watchlist pega las ayudas al fondo y colorea la variacion 24h', () => {
+  const { lineas, texto } = textoWatchlist(estadoWatchlist(['BTCUSDT', 'ETHUSDT']), 24);
+
+  for (const linea of ['h-l - Desplazar', 'y-o - Zoom', 'a - Intervalo 1m', '5 - Bandas de Bollinger']) {
     assert.ok(texto.some(t => t.includes(linea)), 'falta la ayuda: ' + linea);
   }
   assert.match(texto[22], /q - Volver/);
@@ -365,30 +375,29 @@ test('watchlist pega las ayudas al fondo y colorea la variacion 24h', () => {
 });
 
 test('watchlist muestra secciones completas cuando la terminal tiene altura', () => {
-  const estado = {
-    symbol: 'BTCUSDT',
-    simbolos: ['BTCUSDT', 'ETHUSDT'],
-    tickers: {
-      BTCUSDT: { symbol: 'BTCUSDT', price: '111', open_24h: '100' },
-      ETHUSDT: { symbol: 'ETHUSDT', price: '180', open_24h: '200' }
-    },
-    variaciones: { BTCUSDT: 11, ETHUSDT: -10 },
-    tickers_error: null,
-    cursor: 0,
-    foco: 'watchlist',
-    intervalos: ['1m', '5m', '1h', '4h', '1d']
-  };
-  const ayuda = lineasAyuda(estado.intervalos);
-  const ancho = anchoWatchlist(ayuda);
-  const lineas = flatten(vistaWatchlist(estado, { width: ancho, height: 32, ayuda }), ancho, 32);
-  const texto = lineas.map(linea => sanitize(linea.content));
+  const { texto } = textoWatchlist(estadoWatchlist(['BTCUSDT', 'ETHUSDT']), 36);
   const fin = texto.findIndex(linea => linea.includes('╰'));
 
-  for (const linea of ayuda.filter(Boolean)) {
+  for (const linea of seccionesAyuda(['1m', '5m', '1h', '4h', '1d']).flatMap(seccion => seccion.lineas)) {
     assert.ok(texto.some(t => t.includes(linea)), 'falta la ayuda: ' + linea);
   }
+  assert.equal(texto[fin - 2].trim(), '│                            │', 'con lugar las secciones van separadas');
   assert.match(texto[fin - 1], /q - Volver/);
-  assert.equal(texto.length, 32);
+  assert.equal(texto.length, 36);
+});
+
+test('la tabla pinta los valores de cada fila con el color de su vela', () => {
+  const verde = { open_time: 0, open: '10', high: '12', low: '9', close: '11', volume: '5' };
+  const roja = { open_time: 60000, open: '11', high: '12', low: '8', close: '10', volume: '6' };
+  const [primera, segunda] = tablaVelas([verde, roja]).rows;
+  assert.ok(primera.slice(1).every(celda => celda.style.fg === 'danger'), 'la mas reciente va arriba');
+  assert.ok(segunda.slice(1).every(celda => celda.style.fg === 'success'));
+});
+
+test('la tabla muestra el volumen con al menos dos digitos enteros', () => {
+  const vela = volume => ({ open_time: 0, open: '1', high: '1', low: '1', close: '1', volume });
+  const volumenes = ['9.5', '0.25', '8', '12.5', '123'].map(v => tablaVelas([vela(v)]).rows[0][5].text);
+  assert.deepEqual(volumenes, ['09.5', '00.25', '08', '12.5', '123']);
 });
 
 test('la cabecera toma el precio de la ultima vela o del ticker mientras no hay velas', async () => {

@@ -2,7 +2,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { crearMonitor, lineasAyuda } from '../frontend/vistas/monitor.mjs';
+import { crearMonitor, seccionesAyuda } from '../frontend/vistas/monitor.mjs';
 
 const tecla = key => ({ type: 'key', key });
 
@@ -14,19 +14,19 @@ function monitorDePrueba() {
 }
 
 test('cada linea de ayuda sale de un atajo y los intervalos del estado', () => {
-  const ayuda = lineasAyuda(['1m', '1h']).filter(Boolean);
+  const secciones = seccionesAyuda(['1m', '1h']);
+  const ayuda = secciones.flatMap(seccion => seccion.lineas);
   assert.ok(ayuda.includes('a - Intervalo 1m'));
   assert.ok(ayuda.includes('s - Intervalo 1h'));
   assert.ok(!ayuda.some(linea => linea.startsWith('d - ')), 'sin intervalo la tecla no aparece');
+  assert.ok(secciones.some(seccion => seccion.resumen === 'a-s - Intervalos'), 'el resumen sigue las teclas en uso');
   assert.equal(ayuda.at(-1), 'q - Volver');
 });
 
-test('t y p alternan tabla y precision', () => {
+test('t alterna la tabla', () => {
   const { app, estado } = monitorDePrueba();
   app.update(estado, tecla('t'));
   assert.equal(estado.modoTabla, true);
-  app.update(estado, tecla('p'));
-  assert.equal(estado.precision, true);
 });
 
 test('las teclas de indicador alternan su serie', () => {

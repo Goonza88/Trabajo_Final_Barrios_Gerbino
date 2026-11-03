@@ -6,10 +6,8 @@ import { calcularIndicadores, calcularVariacion } from '../../backend/dominio/in
 // limites del zoom horizontal, en velas visibles
 const ZOOM_X = Object.freeze({ min: 20, max: 160, paso: 5 });
 
-// zoom vertical - paso libre y pasos de precision, sus extremos son los limites
-const ZOOM_Y = Object.freeze({ paso: 0.1, pasos: Object.freeze([0.4, 0.5, 0.6, 0.8, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0]) });
-const ZOOM_Y_MIN = ZOOM_Y.pasos[0];
-const ZOOM_Y_MAX = ZOOM_Y.pasos.at(-1);
+// limites del zoom vertical, en veces el rango de precios
+const ZOOM_Y = Object.freeze({ min: 0.4, max: 3.0, paso: 0.1 });
 
 export function crearEstado({
   symbol = 'BTCUSDT',
@@ -46,10 +44,8 @@ export function crearEstado({
     zoomY: 1.0,
     offset: 0,
     offsetY: 0,
-    precision: false,
     modoTabla: false,
-    indicadores: { sma: false, ema: false, rsi: false, volume: false, bollinger: true },
-    zoomYBeforePrecision: null
+    indicadores: { sma: false, ema: false, rsi: false, volume: false, bollinger: true }
   };
 
   // carga en segundo plano - la nueva cancela a la anterior y una respuesta vieja no pisa a la nueva
@@ -199,34 +195,8 @@ export function crearEstado({
   }
 
   function zoomV(dir) {
-    if (estado.precision) {
-      const list = ZOOM_Y.pasos;
-      const idx = list.findIndex(v => Math.abs(v - estado.zoomY) < 1e-6);
-      if (dir === '+') {
-        const next = idx <= 0 ? 0 : idx - 1;
-        estado.zoomY = list[next];
-      } else if (dir === '-') {
-        const next = idx < 0 ? list.findIndex(v => v >= estado.zoomY) : idx + 1;
-        estado.zoomY = list[next >= list.length ? list.length - 1 : next];
-      }
-      return;
-    }
-    if (dir === '+') estado.zoomY = Math.max(ZOOM_Y_MIN, estado.zoomY - ZOOM_Y.paso);
-    if (dir === '-') estado.zoomY = Math.min(ZOOM_Y_MAX, estado.zoomY + ZOOM_Y.paso);
-  }
-
-  // la precision fija el zoom vertical al paso mas cercano y al salir vuelve al zoom previo
-  function alternarPrecision() {
-    if (estado.precision) {
-      if (estado.zoomYBeforePrecision != null) estado.zoomY = estado.zoomYBeforePrecision;
-      estado.zoomYBeforePrecision = null;
-      estado.precision = false;
-      return;
-    }
-    estado.zoomYBeforePrecision = estado.zoomY;
-    estado.precision = true;
-    estado.zoomY = ZOOM_Y.pasos.reduce((mejor, paso) =>
-      Math.abs(paso - estado.zoomY) < Math.abs(mejor - estado.zoomY) ? paso : mejor);
+    if (dir === '+') estado.zoomY = Math.max(ZOOM_Y.min, estado.zoomY - ZOOM_Y.paso);
+    if (dir === '-') estado.zoomY = Math.min(ZOOM_Y.max, estado.zoomY + ZOOM_Y.paso);
   }
 
   function alternarTabla() {
@@ -266,7 +236,6 @@ export function crearEstado({
     alternarIndicador,
     zoomH,
     zoomV,
-    alternarPrecision,
     alternarTabla,
     reiniciarVista,
     mover,
