@@ -57,7 +57,7 @@ export function crearEstado({
         signal: control.signal
       });
       if (id !== carga || control.signal.aborted) return estado;
-      estado.velas = norm.slice(-500);
+      estado.velas = norm;
       const last = estado.velas[estado.velas.length - 1];
       estado.ultimo = last ? last.close : null;
       estado.actualizado_en = Date.now();
