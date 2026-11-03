@@ -169,7 +169,7 @@ function panelVelas(estado, width, height, visibleCount) {
   const error = estado.error ? sanitize(estado.error) : null;
   const { inicio, fin } = rangoVentanaVelas(estado.velas.length, visibleCount, estado.offset);
   const vis = estado.velas.slice(inicio, fin);
-  const precio = estado.ultimo ?? estado.tickers[estado.symbol]?.price;
+  const precio = estado.velas.at(-1)?.close ?? estado.tickers[estado.symbol]?.price;
   const cabecera = estado.symbol + ' ' + estado.interval + ' | ' + fmtPrecio(precio)
     + ' | 24h:' + fmtVariacion(estado.variaciones[estado.symbol])
     + ' | ' + fmtHora(estado.actualizado_en);

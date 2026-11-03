@@ -400,3 +400,16 @@ test('watchlist muestra secciones completas cuando la terminal tiene altura', ()
   assert.match(texto[fin - 1], /q - Volver/);
   assert.equal(texto.length, 32);
 });
+
+test('la cabecera toma el precio de la ultima vela o del ticker mientras no hay velas', async () => {
+  const { estado, cargar, cargarTickers } = crearEstado({
+    cargarVelas: async () => velas(3),
+    cargarTickers: async () => [{ symbol: 'BTCUSDT', price: '999.5', open_24h: '1000' }]
+  });
+  await cargarTickers();
+  const cabecera = () => sanitize(flatten(vistaMonitor(estado), 80, 24).map(l => l.content).join('\n'));
+
+  assert.match(cabecera(), /BTCUSDT 1m \| 999\.5 \|/);
+  await cargar();
+  assert.match(cabecera(), new RegExp('BTCUSDT 1m \\| ' + estado.velas.at(-1).close + ' \\|'));
+});

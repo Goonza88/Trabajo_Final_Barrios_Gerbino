@@ -216,7 +216,6 @@ test('seleccionar cancela la carga anterior y cambia el simbolo', async () => {
 
   assert.equal(estado.velas.length, 1);
   assert.equal(estado.velas[0].close, '200');
-  assert.equal(estado.ultimo, '200');
 });
 
 test('moverCursor y seleccionarCursor eligen dentro de la watchlist', async () => {

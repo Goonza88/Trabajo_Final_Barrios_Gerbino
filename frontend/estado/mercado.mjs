@@ -40,7 +40,6 @@ export function crearEstado({
     cursor: Math.max(0, lista.indexOf(inicial)),
     foco: 'grafico',
     error: null,
-    ultimo: null,
     actualizado_en: null,
     intervalos: ['1m', '5m', '1h', '4h', '1d'],
     zoomX: 80,
@@ -107,8 +106,6 @@ export function crearEstado({
     norm => {
       estado.velas = norm;
       estado.series = calcularIndicadores(norm);
-      const last = estado.velas[estado.velas.length - 1];
-      estado.ultimo = last ? last.close : null;
       estado.actualizado_en = Date.now();
       estado.error = null;
     },
@@ -166,7 +163,6 @@ export function crearEstado({
     estado.cursor = estado.simbolos.indexOf(symbol);
     if (cambio) {
       estado.velas = [];
-      estado.ultimo = null;
       estado.actualizado_en = null;
       estado.error = null;
       estado.offset = 0;
