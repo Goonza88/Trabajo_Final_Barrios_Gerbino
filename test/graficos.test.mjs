@@ -9,27 +9,31 @@ import { capacidadVelas, cantidadVelasVisibles, lineasAyuda, rangoVentanaVelas, 
 import { crearEstado } from '../frontend/estado/mercado.mjs';
 import { anchoWatchlist, vistaWatchlist } from '../frontend/features/watchlist.mjs';
 
-const BLOQUES = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+// mitades de arriba y de abajo de cada trazo, y las rayas de un cuerpo sin alto
+const MITADES = {
+  '╵': ['mecha', ''], '╷': ['', 'mecha'], '│': ['mecha', 'mecha'],
+  '╹': ['cuerpo', ''], '╻': ['', 'cuerpo'], '┃': ['cuerpo', 'cuerpo'],
+  '╽': ['mecha', 'cuerpo'], '╿': ['cuerpo', 'mecha'],
+};
+const RAYAS = { '┿': ['mecha', 'mecha'], '┷': ['mecha', ''], '┯': ['', 'mecha'], '━': ['', ''] };
 
-function celdasCuerpo(node, col) {
-  const celdas = [];
+// lee una columna del grafico - bordes del cuerpo en filas (el limite de arriba de la fila r es
+// r - 0.5) y si mecha y cuerpo forman una sola linea sin huecos
+function leerVela(node, col) {
+  const mitades = [];
+  let raya = null;
   for (let row = 0; row < node.cells.length; row++) {
     const celda = node.cells[row][col];
-    if (!celda || (celda.style?.fg !== 'success' && celda.style?.fg !== 'danger')) continue;
-    const k = BLOQUES.indexOf(celda.ch);
-    if (k > 0) celdas.push({ row, k, ch: celda.ch, reverse: Boolean(celda.style.reverse) });
+    if (celda && RAYAS[celda.ch]) raya = row;
+    mitades.push(...(celda && (RAYAS[celda.ch] ?? MITADES[celda.ch])) || ['', '']);
   }
-  return celdas;
-}
-
-// recupera la coord del borde desde el bloque de una punta del cuerpo
-function bordeY(celda, esInferior) {
-  const rowTop = celda.row - 0.5;
-  if (celda.k === 8) return rowTop + (esInferior ? 1 : 0);
-  const borde = rowTop + (8 - celda.k) / 8;
-  return celda.reverse
-    ? (esInferior ? borde : rowTop)
-    : (esInferior ? rowTop + 1 : borde);
+  const cuerpo = mitades.flatMap((mitad, s) => mitad === 'cuerpo' ? [s] : []);
+  const ocupadas = mitades.flatMap((mitad, s) => mitad ? [s] : []);
+  const continua = ocupadas.every((s, i) => i === 0 || s === ocupadas[i - 1] + 1)
+    && (raya == null || !ocupadas.length || (ocupadas[0] <= 2 * raya + 1 && ocupadas.at(-1) >= 2 * raya));
+  if (raya != null) return { top: raya, bottom: raya, raya: true, continua };
+  if (!cuerpo.length) return { top: NaN, bottom: NaN, raya: false, continua };
+  return { top: cuerpo[0] / 2 - 0.5, bottom: (cuerpo.at(-1) + 1) / 2 - 0.5, raya: false, continua };
 }
 
 function velas(cantidad, base = 100) {
@@ -93,29 +97,22 @@ test('cierre de una vela y apertura de la siguiente comparten el mismo borde', (
     height: 12,
     showAxis: false,
   });
-  const primera = celdasCuerpo(node, 0);
-  const segunda = celdasCuerpo(node, 1);
-
-  assert.ok(primera.length > 0);
-  assert.ok(segunda.length > 0);
-  assert.equal(bordeY(primera.at(-1), true), bordeY(segunda[0], false));
+  // velas rojas - el cierre es el borde de abajo y la apertura el de arriba
+  assert.equal(leerVela(node, 0).bottom, leerVela(node, 1).top);
 });
 
-test('la punta de la mecha no reemplaza el borde exacto del cuerpo', () => {
+test('la mecha siempre toca el cuerpo', () => {
   const node = graficoVelas({
     velas: [
-      { open_time: 0, open: '110', high: '110', low: '99.6', close: '100', volume: '1' },
-      { open_time: 60000, open: '100', high: '101', low: '90', close: '90', volume: '1' },
+      { open_time: 0, open: '110', high: '113.3', low: '96.4', close: '100', volume: '1' },
+      { open_time: 60000, open: '100', high: '101.7', low: '88.2', close: '90', volume: '1' },
+      { open_time: 120000, open: '90', high: '104.1', low: '89.6', close: '103.2', volume: '1' },
     ],
-    width: 2,
+    width: 3,
     height: 12,
     showAxis: false,
   });
-  const ultima = celdasCuerpo(node, 0).at(-1);
-
-  assert.ok(ultima);
-  assert.ok(ultima.k < 8, 'el cierre debe quedar en un borde parcial, no en una fila completa');
-  assert.equal(ultima.reverse, true);
+  for (let col = 0; col < 3; col++) assert.ok(leerVela(node, col).continua, 'hueco en la vela ' + col);
 });
 
 test('un borde de cuerpo en el limite de fila no deja hueco', () => {
@@ -128,14 +125,11 @@ test('un borde de cuerpo en el limite de fila no deja hueco', () => {
     height: 12,
     showAxis: false,
   });
-  const primera = celdasCuerpo(node, 0);
-  const segunda = celdasCuerpo(node, 1);
+  const primera = leerVela(node, 0);
+  const segunda = leerVela(node, 1);
 
-  assert.deepEqual(primera.map(celda => celda.row), [0, 1, 2, 3, 4, 5]);
-  assert.deepEqual(segunda.map(celda => celda.row), [6, 7, 8, 9, 10, 11]);
-  assert.equal(primera.at(-1).k, 8);
-  assert.equal(segunda[0].k, 8);
-  assert.equal(bordeY(primera.at(-1), true), bordeY(segunda[0], false));
+  assert.equal(primera.bottom, segunda.top);
+  assert.equal(primera.bottom % 1, 0.5, 'el borde cae justo entre dos filas');
 });
 
 test('un doji sigue siendo visible', () => {
@@ -149,11 +143,27 @@ test('un doji sigue siendo visible', () => {
     showAxis: false,
   });
 
-  assert.ok(celdasCuerpo(node, 0).length > 0);
-  assert.ok(celdasCuerpo(node, 1).length > 0);
+  assert.ok(Number.isFinite(leerVela(node, 0).top));
+  assert.ok(Number.isFinite(leerVela(node, 1).top));
 });
 
-test('dos velas verdes con un cuerpo de una fila empalman sus bordes', () => {
+test('un doji en el medio de una fila es una raya cruzada por la mecha', () => {
+  const node = graficoVelas({
+    velas: [
+      { open_time: 0, open: '100', high: '110', low: '90', close: '100', volume: '1' },
+      { open_time: 60000, open: '100', high: '100', low: '90', close: '100', volume: '1' },
+      { open_time: 120000, open: '100', high: '110', low: '100', close: '100', volume: '1' },
+    ],
+    width: 3,
+    height: 3,
+    showAxis: false,
+  });
+
+  assert.deepEqual([0, 1, 2].map(col => node.cells[1][col]?.ch), ['┿', '┯', '┷']);
+  assert.ok([0, 1, 2].every(col => leerVela(node, col).continua));
+});
+
+test('dos velas verdes con un cuerpo corto empalman sus bordes', () => {
   const node = graficoVelas({
     velas: [
       { open_time: 0, open: '100', high: '100.5', low: '98.5', close: '100.5', volume: '1' },
@@ -163,15 +173,11 @@ test('dos velas verdes con un cuerpo de una fila empalman sus bordes', () => {
     height: 8,
     showAxis: false,
   });
-  const primera = celdasCuerpo(node, 0);
-  const segunda = celdasCuerpo(node, 1);
-
-  assert.equal(primera.length, 1);
-  // en una vela verde el cierre es el borde superior y la apertura el inferior
-  assert.equal(bordeY(primera[0], false), bordeY(segunda.at(-1), true));
+  // en una vela verde el cierre es el borde de arriba y la apertura el de abajo
+  assert.equal(leerVela(node, 0).top, leerVela(node, 1).bottom);
 });
 
-test('dos velas rojas con un cuerpo de una fila empalman sus bordes', () => {
+test('dos velas rojas con un cuerpo corto empalman sus bordes', () => {
   const node = graficoVelas({
     velas: [
       { open_time: 0, open: '101', high: '101', low: '98.5', close: '100.5', volume: '1' },
@@ -181,12 +187,7 @@ test('dos velas rojas con un cuerpo de una fila empalman sus bordes', () => {
     height: 8,
     showAxis: false,
   });
-  const primera = celdasCuerpo(node, 0);
-  const segunda = celdasCuerpo(node, 1);
-
-  assert.equal(primera.length, 1);
-  // en una vela roja el cierre es el borde inferior y la apertura el superior
-  assert.equal(bordeY(primera.at(-1), true), bordeY(segunda[0], false));
+  assert.equal(leerVela(node, 0).bottom, leerVela(node, 1).top);
 });
 
 test('un doji empalma con la apertura de la vela siguiente', () => {
@@ -199,16 +200,12 @@ test('un doji empalma con la apertura de la vela siguiente', () => {
     height: 8,
     showAxis: false,
   });
-  const doji = celdasCuerpo(node, 0);
-  const siguiente = celdasCuerpo(node, 1);
-
-  assert.ok(doji.length > 0);
-  assert.ok(siguiente.length > 0);
-  const bordeDoji = bordeY(doji[0], doji[0].reverse);
-  assert.equal(bordeDoji, bordeY(siguiente.at(-1), true));
+  const doji = leerVela(node, 0);
+  const apertura = leerVela(node, 1).bottom;
+  assert.ok(doji.top === apertura || doji.bottom === apertura);
 });
 
-test('un cuerpo corto entre dos cuerpos largos elige el empalme de menor hueco', () => {
+test('un cuerpo corto entre dos cuerpos largos empalma al menos un lado', () => {
   const node = graficoVelas({
     velas: [
       { open_time: 0, open: '101', high: '110', low: '100', close: '105', volume: '1' },
@@ -219,19 +216,12 @@ test('un cuerpo corto entre dos cuerpos largos elige el empalme de menor hueco',
     height: 8,
     showAxis: false,
   });
-  const primera = celdasCuerpo(node, 0);
-  const segunda = celdasCuerpo(node, 1);
-  const tercera = celdasCuerpo(node, 2);
+  const [primera, segunda, tercera] = [0, 1, 2].map(col => leerVela(node, col));
 
-  assert.ok(primera.length > 1);
-  assert.equal(segunda.length, 1);
-  assert.ok(tercera.length > 1);
-
-  const entrada = Math.abs(bordeY(primera[0], false) - bordeY(segunda.at(-1), true));
-  const salida = Math.abs(bordeY(segunda[0], false) - bordeY(tercera[0], false));
-  assert.ok(entrada <= 1 / 8 + 1e-9);
-  assert.ok(salida <= 1 / 8 + 1e-9);
-  assert.ok(Math.min(entrada, salida) < 1e-9);
+  const entrada = Math.abs(primera.top - segunda.bottom);
+  const salida = Math.abs(segunda.top - tercera.top);
+  assert.ok(Math.max(entrada, salida) <= 0.5);
+  assert.equal(Math.min(entrada, salida), 0);
 });
 
 test('graficoVelas sin velas ocupa el grid y avisa', () => {

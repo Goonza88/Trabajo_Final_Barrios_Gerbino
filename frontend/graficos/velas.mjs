@@ -2,12 +2,26 @@
 
 import { grid, table } from '../../backend/terminal/widgets.mjs';
 
-// bloques por octavos para puntas de cuerpos de velas
-const BLOCK8 = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+// velas por mitades de fila - linea fina para la mecha y gruesa para el cuerpo
+// la clave es lo que ocupa la mitad de arriba y la de abajo de la celda
+const TRAZOS = {
+  'mecha,': '╵',
+  ',mecha': '╷',
+  'mecha,mecha': '│',
+  'cuerpo,': '╹',
+  ',cuerpo': '╻',
+  'cuerpo,cuerpo': '┃',
+  'mecha,cuerpo': '╽',
+  'cuerpo,mecha': '╿',
+};
 
-// lineas verticales cortadas para las mechas
-const HALF_UP = '╵';
-const HALF_DOWN = '╷';
+// cuerpo sin alto (doji o casi) en el medio de la fila - raya gruesa cruzada por la mecha
+const MARCAS = {
+  'mecha,mecha': '┿',
+  'mecha,': '┷',
+  ',mecha': '┯',
+  ',': '━',
+};
 
 // columnas del eje de precios a la izquierda del grafico
 function anchoEje(totalW, showAxis) {
@@ -281,205 +295,35 @@ export function graficoVelas({
     }
   }
 
-  // filas de la grilla (0..plotH-1) cubren bandas continuas [r-0.5, r+0.5)
-  function rowsCovered(p1, p2) {
-    const minP = Math.min(p1, p2);
-    const maxP = Math.max(p1, p2);
-    if (maxP <= -0.5 || minP >= plotH - 0.5) return [];
-    const rows = [];
-    for (let r = 0; r < plotH; r++) {
-      const ov = Math.min(maxP, r + 0.5) - Math.max(minP, r - 0.5);
-      if (ov > 1e-9) rows.push(r);
+  // limite de media fila mas cercano a una posicion - la mitad s va del limite s al s + 1,
+  // y la fila r tiene las mitades 2r (arriba) y 2r + 1 (abajo)
+  const limiteMitad = (p) => Math.round((p + 0.5) * 2);
+
+  // una o dos formas de dibujar el cuerpo - si apertura y cierre caen en el mismo limite y es el
+  // medio de una fila, el cuerpo es una raya sin alto; si es el borde entre dos filas, ocupa la media
+  // fila de arriba o la de abajo, y la eleccion la hace elegirCuerpos
+  function estadosCuerpo(pO, pC) {
+    if (!Number.isFinite(pO) || !Number.isFinite(pC)) {
+      return [{ inicio: NaN, fin: NaN, open: NaN, close: NaN, local: 0 }];
     }
-    if (!rows.length) rows.push(Math.max(0, Math.min(plotH - 1, Math.round((minP + maxP) / 2))));
-    return rows;
-  }
-
-  // bordes del cuerpo por octavos - q es la posicion del borde dentro de la fila
-  function bloqueArriba(q, style) {
-    if (q <= 0) return null;
-    if (q >= 8) return { ch: '█', style };
-    return { ch: BLOCK8[8 - q], style: { ...style, reverse: true } };
-  }
-
-  function bloqueAbajo(q, style) {
-    if (q >= 8) return null;
-    if (q <= 0) return { ch: '█', style };
-    return { ch: BLOCK8[8 - q], style };
-  }
-
-  function bordeSuperior(celda) {
-    const rowTop = celda.row - 0.5;
-    if (celda.ch === '█') return rowTop;
-    const k = BLOCK8.indexOf(celda.ch);
-    return celda.style?.reverse ? rowTop : rowTop + (8 - k) / 8;
-  }
-
-  function bordeInferior(celda) {
-    const rowTop = celda.row - 0.5;
-    if (celda.ch === '█') return rowTop + 1;
-    const k = BLOCK8.indexOf(celda.ch);
-    return celda.style?.reverse ? rowTop + (8 - k) / 8 : rowTop + 1;
-  }
-
-  function errorCuerpo(top, bottom, yTop, yBottom) {
-    return (top - yTop) ** 2 + (bottom - yBottom) ** 2;
-  }
-
-  function estadoCuerpo(top, bottom, celdas, yTop, yBottom, alcista) {
-    return {
-      top,
-      bottom,
-      open: alcista ? bottom : top,
-      close: alcista ? top : bottom,
-      celdas,
-      local: errorCuerpo(top, bottom, yTop, yBottom),
-    };
-  }
-
-  // una o dos formas para dibujar el cuerpo, segun si entra en una fila o no
-  function estadosCuerpo(pO, pC, style) {
-    const yTop = Math.min(pO, pC);
-    const yBottom = Math.max(pO, pC);
     const alcista = pC <= pO;
-    const vacio = [{ top: NaN, bottom: NaN, open: NaN, close: NaN, celdas: [], local: 0 }];
-    if (!Number.isFinite(yTop) || !Number.isFinite(yBottom)) return vacio;
-    if (yBottom < -0.5 || yTop > plotH - 0.5) return vacio;
-
-    if (yBottom - yTop <= 1e-9) {
-      // doji - marca en el octavo mas cercano, borde en el precio
-      const row = Math.max(0, Math.min(plotH - 1, Math.floor(yTop + 0.5)));
-      const rowTop = row - 0.5;
-      const q = Math.max(1, Math.min(7, Math.round((yTop - rowTop) * 8)));
-      const borde = rowTop + q / 8;
-      const celda = q <= 4 ? bloqueArriba(q, style) : bloqueAbajo(q, style);
-      return [estadoCuerpo(
-        borde,
-        borde,
-        celda ? [{ row, ...celda }] : [],
-        yTop,
-        yBottom,
-        alcista
-      )];
+    const yTop = (Math.min(pO, pC) + 0.5) * 2;
+    const yBottom = (Math.max(pO, pC) + 0.5) * 2;
+    const estado = (inicio, fin) => ({
+      inicio,
+      fin,
+      open: alcista ? fin : inicio,
+      close: alcista ? inicio : fin,
+      local: (inicio - yTop) ** 2 + (fin - yBottom) ** 2,
+    });
+    const inicio = limiteMitad(Math.min(pO, pC));
+    const fin = limiteMitad(Math.max(pO, pC));
+    if (fin > inicio || inicio % 2 === 1) return [estado(inicio, fin)];
+    // en un doji apertura y cierre son el mismo limite, en cualquiera de las dos formas
+    if (pO === pC) {
+      return [inicio - 1, inicio].map(desde => ({ ...estado(desde, desde + 1), open: inicio, close: inicio }));
     }
-
-    const first = Math.max(0, Math.floor(yTop + 0.5));
-    const last = Math.min(plotH - 1, Math.floor(yBottom + 0.5));
-    if (first > last) return vacio;
-    const rowTop = first - 0.5;
-    const rowBottom = first + 0.5;
-
-    if (first === last && yTop > rowTop + 1e-9 && yBottom < rowBottom - 1e-9) {
-      const qT = Math.max(1, Math.min(7, Math.round((yTop - rowTop) * 8)));
-      const qB = Math.max(1, Math.min(7, Math.round((yBottom - rowTop) * 8)));
-      const topArriba = rowTop + qT / 8;
-      const bottomAbajo = rowTop + qB / 8;
-      const celdaArriba = bloqueAbajo(qT, style);
-      const celdaAbajo = bloqueArriba(qB, style);
-      return [
-        estadoCuerpo(
-          topArriba,
-          rowBottom,
-          celdaArriba ? [{ row: first, ...celdaArriba }] : [],
-          yTop,
-          yBottom,
-          alcista
-        ),
-        estadoCuerpo(
-          rowTop,
-          bottomAbajo,
-          celdaAbajo ? [{ row: first, ...celdaAbajo }] : [],
-          yTop,
-          yBottom,
-          alcista
-        ),
-      ];
-    }
-
-    if (first === last) {
-      const filaTop = first - 0.5;
-      const filaBottom = first + 0.5;
-      const arribaDentro = yTop > filaTop + 1e-9;
-      const abajoDentro = yBottom < filaBottom - 1e-9;
-      const qT = arribaDentro
-        ? Math.max(0, Math.min(7, Math.round((yTop - filaTop) * 8)))
-        : 0;
-      const qB = abajoDentro
-        ? Math.max(1, Math.min(8, Math.round((yBottom - filaTop) * 8)))
-        : 8;
-      const celda = arribaDentro
-        ? bloqueAbajo(qT, style)
-        : abajoDentro ? bloqueArriba(qB, style) : { ch: '█', style };
-      if (!celda) return vacio;
-      return [estadoCuerpo(
-        bordeSuperior({ row: first, ...celda }),
-        bordeInferior({ row: first, ...celda }),
-        [{ row: first, ...celda }],
-        yTop,
-        yBottom,
-        alcista
-      )];
-    }
-
-    const capTop = first - 0.5;
-    const capBottom = last - 0.5;
-    const qT0 = yTop > capTop + 1e-9
-      ? Math.max(0, Math.min(8, Math.round((yTop - capTop) * 8)))
-      : 0;
-    const qB0 = yBottom < capBottom + 1 - 1e-9
-      ? Math.max(0, Math.min(8, Math.round((yBottom - capBottom) * 8)))
-      : 8;
-
-    // en borde que cae sobre limite de fila, el DP elije cual dibujar
-    const opcionesT = qT0 === 0 ? [0, 1] : qT0 === 8 ? [8, 7] : [qT0];
-    const opcionesB = qB0 === 0 ? [0, 1] : qB0 === 8 ? [8, 7] : [qB0];
-    const estados = [];
-    for (const qT of opcionesT) {
-      for (const qB of opcionesB) {
-        const celdas = [];
-        if (qT === 0) {
-          celdas.push({ row: first, ch: '█', style });
-        } else if (qT < 8) {
-          const celda = bloqueAbajo(qT, style);
-          if (celda) celdas.push({ row: first, ...celda });
-        }
-        for (let r = first + 1; r < last; r++) {
-          celdas.push({ row: r, ch: '█', style });
-        }
-        if (qB === 8) {
-          celdas.push({ row: last, ch: '█', style });
-        } else if (qB > 0) {
-          const celda = bloqueArriba(qB, style);
-          if (celda) celdas.push({ row: last, ...celda });
-        }
-        if (!celdas.length) continue;
-        estados.push(estadoCuerpo(
-          capTop + qT / 8,
-          capBottom + qB / 8,
-          celdas,
-          yTop,
-          yBottom,
-          alcista
-        ));
-      }
-    }
-    if (estados.length) return estados;
-
-    // cuerpo mas delgado que un octavo justo sobre un limite de fila
-    const medio = (yTop + yBottom) / 2;
-    const row = Math.max(0, Math.min(plotH - 1, Math.floor(medio + 0.5)));
-    const filaTopMarca = row - 0.5;
-    const q = Math.max(1, Math.min(7, Math.round((medio - filaTopMarca) * 8)));
-    const borde = filaTopMarca + q / 8;
-    const celda = q <= 4 ? bloqueArriba(q, style) : bloqueAbajo(q, style);
-    return [estadoCuerpo(
-      borde,
-      borde,
-      celda ? [{ row, ...celda }] : [],
-      yTop,
-      yBottom,
-      alcista
-    )];
+    return [estado(inicio - 1, inicio), estado(inicio, inicio + 1)];
   }
 
   function mismoPrecio(a, b) {
@@ -539,39 +383,32 @@ export function graficoVelas({
     const col = colForIndex(i);
     const style = { fg: cl >= o ? 'success' : 'danger' };
     if (col < 0 || col >= plotW) {
-      return { col, style, estados: [{ top: NaN, bottom: NaN, open: NaN, close: NaN, celdas: [], local: 0 }] };
+      return { col, style, estados: [{ inicio: NaN, fin: NaN, open: NaN, close: NaN, local: 0 }] };
     }
-    return { col, style, estados: estadosCuerpo(py(o), py(cl), style) };
+    return { col, style, estados: estadosCuerpo(py(o), py(cl)) };
   });
   const eleccion = elegirCuerpos(cuerpos);
 
   for (let i = 0; i < velas.length; i++) {
-    const c = velas[i];
-    const o = Number(c.open), cl = Number(c.close), lo = Number(c.low), hi = Number(c.high);
     const { col, style } = cuerpos[i];
     if (col < 0 || col >= plotW) continue;
-    const pH = py(hi), pL = py(lo);
-    const wickRows = rowsCovered(pH, pL);
-    for (const r of wickRows) {
-      if (plot[r]) plot[r][col] = { ch: '|', style };
-    }
-    // puntas por octavos, mechas por mitades
-    if (wickRows.length > 1) {
-      const top = wickRows[0];
-      if (pH > -0.5 && pH < plotH - 0.5) {
-        const f = Math.min(1, Math.max(0, top + 0.5 - pH));
-        if (f < 0.75) plot[top][col] = { ch: HALF_DOWN, style };
-      }
-      const bottom = wickRows[wickRows.length - 1];
-      if (pL > -0.5 && pL < plotH - 0.5) {
-        const u = Math.min(1, Math.max(0, pL - (bottom - 0.5)));
-        if (u < 0.75) plot[bottom][col] = { ch: HALF_UP, style };
-      }
-    }
-    // el cuerpo se pinta al final para que su borde no lo pise la mecha
     const estado = cuerpos[i].estados[eleccion[i]];
-    for (const celda of estado.celdas) {
-      if (plot[celda.row]) plot[celda.row][col] = { ch: celda.ch, style: celda.style };
+    const conCuerpo = Number.isFinite(estado.inicio);
+    // la mecha llega al menos hasta el cuerpo, para que siempre se toquen
+    const desde = Math.min(limiteMitad(py(Number(velas[i].high))), conCuerpo ? estado.inicio : Infinity);
+    const hasta = Math.max(limiteMitad(py(Number(velas[i].low))), conCuerpo ? estado.fin : -Infinity);
+    // fila de la raya cuando el cuerpo no tiene alto
+    const marca = conCuerpo && estado.inicio === estado.fin ? (estado.inicio - 1) / 2 : null;
+    const mitad = (s) => {
+      if (s < desde || s >= hasta) return '';
+      return conCuerpo && s >= estado.inicio && s < estado.fin ? 'cuerpo' : 'mecha';
+    };
+    const primera = Math.max(0, Math.floor(desde / 2));
+    const ultima = Math.min(plotH - 1, Math.floor((hasta - 1) / 2));
+    for (let row = primera; row <= ultima; row++) {
+      const clave = mitad(2 * row) + ',' + mitad(2 * row + 1);
+      const ch = row === marca ? MARCAS[clave] : TRAZOS[clave];
+      if (ch) plot[row][col] = { ch, style };
     }
   }
 
