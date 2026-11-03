@@ -53,30 +53,27 @@ const ANSI = /\x1b\[[0-9;?]*[a-zA-Z]/g;
 
 // COLOR ===========================================================================================
 
-// paleta de colores por rol (para la UI)
-export const palette = {
-  text:    escape.fg(0xaa, 0xab, 0xac),
-  accent:  escape.fg(0x98, 0x6c, 0x98),
-  sec:     escape.fg(0x8a, 0xb6, 0xbb),
-  danger:  escape.fg(0x98, 0x59, 0x54),
-  muted:   escape.fg(0x88, 0x88, 0x88),
-  reader:  escape.fg(0x66, 0x66, 0x66),
-  success: escape.fg(0x6f, 0xac, 0x67),
-};
-
 // paleta de colores raw, defaults neutros - reemplazables con setPalette
 const raw = {
-  text:     [0xaa, 0xab, 0xac],
-  accent:   [0x98, 0x6c, 0x98],
-  sec:      [0x8a, 0xb6, 0xbb],
-  danger:   [0x98, 0x59, 0x54],
-  muted:    [0x88, 0x88, 0x88],
-  reader:   [0x66, 0x66, 0x66],
-  success:  [0x6f, 0xac, 0x67],
+  text:      [0xaa, 0xab, 0xac],
+  accent:    [0x98, 0x6c, 0x98],
+  sec:       [0x8a, 0xb6, 0xbb],
+  danger:    [0x98, 0x59, 0x54],
+  muted:     [0x88, 0x88, 0x88],
+  reader:    [0x66, 0x66, 0x66],
+  success:   [0x6f, 0xac, 0x67],
   selected:  [0x25, 0x27, 0x27],
   successBg: [0x14, 0x1f, 0x13],
   dangerBg:  [0x1b, 0x10, 0x0f],
 };
+
+// roles que solo se usan de fondo - no tienen escape de texto en palette
+const BACKGROUNDS = ['selected', 'successBg', 'dangerBg'];
+
+// paleta de colores por rol (para la UI) - el escape de texto de cada rol raw que no es fondo
+export const palette = Object.fromEntries(Object.entries(raw)
+  .filter(([rol]) => !BACKGROUNDS.includes(rol))
+  .map(([rol, rgb]) => [rol, escape.fg(...rgb)]));
 
 // reemplaza colores de la paleta por rol - rol desconocido lanza, el resto conserva color
 export function setPalette(parcial) {

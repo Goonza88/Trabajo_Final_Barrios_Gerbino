@@ -69,6 +69,9 @@ Son tareas que no tienen relacion con el dominio de la app, pero se repiten en t
 - `view(model)`: devuelve el arbol de widgets
 - `subscriptions`: los eventos que la app pide por su cuenta - `Sub.interval` repite y `Sub.timeout` suena una sola vez (para arrancar una carga sin bloquear el primer frame)
 - `stop()`: suelta la terminal (timers, listeners y raw mode) sin salir del proceso - despues de stop() la app puede volver a arrancar con `run()`. main.mjs lo usa para cederle la terminal al menu de demos y retomarla cuando termina
+- `quit(code)`: hace `stop()` y termina el proceso con ese codigo
+- `size()`: devuelve `{ cols, rows }` de la terminal, para que la app no lea `process.stdout`
+- `invalidate()`: pide repintar sin pasar por `update`, para cuando termina una carga en segundo plano
 
 > Si update no devuelve nada, se asume que modifico el modelo, asi que una app simple puede mutarlo directamente
 

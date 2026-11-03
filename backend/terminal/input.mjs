@@ -76,15 +76,18 @@ function controlName(char) {
 function decodeText(str) {
   const out = [];
   for (const char of str) {
-    const codePoint = char.codePointAt(0);
-    if (codePoint === 0x03) out.push(keyEvent('Ctrl+c', { ctrl: true }));
-    else if (codePoint === 0x0d || codePoint === 0x0a) out.push(keyEvent('Enter'));
-    else if (codePoint === 0x09) out.push(keyEvent('Tab'));
-    else if (codePoint === 0x7f || codePoint === 0x08) out.push(keyEvent('Backspace'));
-    else if (codePoint < 0x20) out.push(keyEvent('Ctrl+' + String.fromCharCode(codePoint + 96), { ctrl: true }));
-    else out.push(keyEvent(char));
+    const name = controlName(char);
+    out.push(name ? keyEvent(name, { ctrl: name.startsWith('Ctrl+') }) : keyEvent(char));
   }
   return out;
+}
+
+// largo de un caracter UTF-8 segun su primer byte
+function utf8Expected(lead) {
+  if ((lead & 0xe0) === 0xc0) return 2;
+  if ((lead & 0xf0) === 0xe0) return 3;
+  if ((lead & 0xf8) === 0xf0) return 4;
+  return 1; // 1 para ASCII o un byte que no inicia caracter
 }
 
 // bytes que faltan al buffer para completar el ultimo caracter UTF-8
@@ -93,24 +96,14 @@ export function utf8Pending(buf) {
   let continuations = 0;
   while (i >= 0 && (buf[i] & 0xc0) === 0x80) { continuations++; i--; } // continuaciones
   if (i < 0) return 0;
-  const lead = buf[i];
-  let expect; // esperar si nos quedamos cortos del total
-  if ((lead & 0xe0) === 0xc0) expect = 2;
-  else if ((lead & 0xf0) === 0xe0) expect = 3;
-  else if ((lead & 0xf8) === 0xf0) expect = 4;
-  else return 0;
+  const expect = utf8Expected(buf[i]); // esperar si nos quedamos cortos del total
   return (1 + continuations) < expect ? buf.length - i : 0;
 }
 
 // largo de un caracter UTF-8 completo en buf[i] - 0 si todavia faltan bytes
 function utf8CharLen(buf, i) {
-  const lead = buf[i];
-  if (lead < 0x80) return 1;
-  let expect;
-  if ((lead & 0xe0) === 0xc0) expect = 2;
-  else if ((lead & 0xf0) === 0xe0) expect = 3;
-  else if ((lead & 0xf8) === 0xf0) expect = 4;
-  else return 1; // byte invalido: que lo decodifique el reemplazo de utf8
+  const expect = utf8Expected(buf[i]);
+  if (expect === 1) return 1; // ASCII o byte invalido: lo decodifica el reemplazo de utf8
   if (i + expect > buf.length) return 0;
   for (let k = 1; k < expect; k++) {
     if ((buf[i + k] & 0xc0) !== 0x80) return 1;

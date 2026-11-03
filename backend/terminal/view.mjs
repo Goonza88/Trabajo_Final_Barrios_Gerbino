@@ -3,8 +3,6 @@
 import { escape, palette, toAnsi, textWidth, truncateTo } from './ansi.mjs';
 import { boxSize } from './layout.mjs';
 
-export { BORDERS } from './layout.mjs';
-
 // BANDAS ==========================================================================================
 
 // reparte el total en bandas - fijas pasan tal cual, nulls comparten sobrante
