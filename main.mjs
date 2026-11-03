@@ -1,13 +1,11 @@
-// entry point temporal de la app - inicia el substrato de la terminal
-// con "d" se ejecuta el menu de demos - la primera vista real la arma frontend/vistas
+// entry point de la app - aplica la paleta y alterna entre el inicio, el monitor y los demos
 
 import { spawn } from 'node:child_process';
-import { run, stop, size, quit, Sub, invalidate } from './backend/terminal/runtime.mjs';
+import { run, stop, size, quit } from './backend/terminal/runtime.mjs';
 import { setPalette } from './backend/terminal/ansi.mjs';
 import { PALETA } from './frontend/paleta.mjs';
 import { box, rows, text, gap } from './backend/terminal/widgets.mjs';
-import { crearEstado } from './frontend/estado/mercado.mjs';
-import { capacidadVelas, cantidadVelasVisibles, vistaMercado } from './frontend/vistas/mercado.mjs';
+import { crearMonitor } from './frontend/vistas/monitor.mjs';
 
 setPalette(PALETA);
 
@@ -45,129 +43,26 @@ const home = {
     }
     if (event.key === 'm') {
       stop();
-      run(mercado);
+      run(monitor);
       return;
     }
     return model;
   },
 };
 
-let modoTabla = false;
-const INDICADORES_POR_TECLA = {
-  '1': 'sma',
-  '2': 'ema',
-  '3': 'rsi',
-  '4': 'volume',
-  '5': 'bollinger',
-};
+// el monitor se crea una vez - conserva simbolo, zoom e indicadores entre visitas
+const monitor = crearMonitor({
+  symbol: 'BTCUSDT',
+  simbolos: ['BTCUSDT', 'ETHUSDT'],
+  interval: '1m',
+  limite: 200,
+  salir: volverAlInicio,
+});
 
-function alTerminarCarga(promesa) {
-  promesa.then(() => invalidate());
+function volverAlInicio() {
+  stop();
+  run(home);
 }
-
-function mercadoApp() {
-  const simbolos = ['BTCUSDT', 'ETHUSDT'];
-  const {
-    estado,
-    cargar,
-    cargarTickers,
-    setIntervalo,
-    moverCursor,
-    seleccionarCursor,
-    setFoco,
-    alternarFoco,
-    alternarIndicador,
-    zoomH,
-    zoomV,
-    mover,
-    cancelar
-  } = crearEstado({ symbol: 'BTCUSDT', simbolos, interval: '1m', limite: 200 });
-
-  return {
-    init: async () => {
-      modoTabla = false;
-      await Promise.all([cargar(), cargarTickers()]);
-      return estado;
-    },
-    subscriptions: [Sub.interval(5000, 'poll')],
-    update: async (model, event) => {
-      if (event.type === 'key') {
-        if (event.key === 'q') {
-          cancelar();
-          stop();
-          run(home);
-          return model;
-        }
-        if (event.key === 'Tab') {
-          alternarFoco();
-          return estado;
-        }
-        if (event.key === 'Enter') {
-          if (estado.foco === 'watchlist') {
-            setFoco('grafico');
-            alTerminarCarga(seleccionarCursor());
-          }
-          return estado;
-        }
-        if (event.key === 't') {
-          modoTabla = !modoTabla;
-          return estado;
-        }
-        if (INDICADORES_POR_TECLA[event.key]) {
-          alternarIndicador(INDICADORES_POR_TECLA[event.key]);
-          return estado;
-        }
-        if (event.key === 'p') {
-          if (!estado.precision) {
-            estado.zoomYBeforePrecision = estado.zoomY;
-            estado.precision = true;
-            const list = estado.zoomYSnap;
-            let best = 0, bestD = Infinity;
-            for (let i = 0; i < list.length; i++) {
-              const d = Math.abs(list[i] - estado.zoomY);
-              if (d < bestD) { bestD = d; best = i; }
-            }
-            estado.zoomY = list[best];
-          } else {
-            if (estado.zoomYBeforePrecision != null) {
-              estado.zoomY = estado.zoomYBeforePrecision;
-              estado.zoomYBeforePrecision = null;
-            }
-            estado.precision = false;
-          }
-          return estado;
-        }
-        if (event.key === 'a') { alTerminarCarga(setIntervalo('1m')); return estado; }
-        if (event.key === 's') { alTerminarCarga(setIntervalo('5m')); return estado; }
-        if (event.key === 'd') { alTerminarCarga(setIntervalo('1h')); return estado; }
-        if (event.key === 'f') { alTerminarCarga(setIntervalo('4h')); return estado; }
-        if (event.key === 'g') { alTerminarCarga(setIntervalo('1d')); return estado; }
-        if (estado.foco === 'watchlist') {
-          if (event.key === 'j' || event.key === 'ArrowDown') { moverCursor(1); return estado; }
-          if (event.key === 'k' || event.key === 'ArrowUp') { moverCursor(-1); return estado; }
-          return estado;
-        }
-        if (event.key === 'h' || event.key === 'ArrowLeft') { mover('h', cantidadVelasVisibles(estado, modoTabla)); return estado; }
-        if (event.key === 'j' || event.key === 'ArrowDown') { mover('j'); return estado; }
-        if (event.key === 'k' || event.key === 'ArrowUp') { mover('k'); return estado; }
-        if (event.key === 'l' || event.key === 'ArrowRight') { mover('l', cantidadVelasVisibles(estado, modoTabla)); return estado; }
-        if (event.key === 'y') { zoomH('-', modoTabla ? 160 : capacidadVelas(estado)); return estado; }
-        if (event.key === 'o') { zoomH('+', modoTabla ? 160 : capacidadVelas(estado)); return estado; }
-        if (event.key === 'u') { zoomV('-'); return estado; }
-        if (event.key === 'i') { zoomV('+'); return estado; }
-      }
-      if (event.type === 'sub:tick' && event.tag === 'poll') {
-        alTerminarCarga(cargar({ reemplazar: false }));
-        alTerminarCarga(cargarTickers({ reemplazar: false }));
-        return estado;
-      }
-      return model;
-    },
-    view: () => vistaMercado(estado, modoTabla)
-  };
-}
-
-const mercado = mercadoApp();
 
 function correrMenu() {
   return new Promise(resolve => {

@@ -323,3 +323,36 @@ test('cargarTickers deja la variacion de 24h de cada simbolo', async () => {
   assert.equal(Math.round(estado.variaciones.BTCUSDT), 10);
   assert.equal(Math.round(estado.variaciones.ETHUSDT), -10);
 });
+
+test('precision fija el zoom vertical al paso mas cercano y al salir vuelve al previo', () => {
+  const { estado, alternarPrecision, zoomV } = crearEstado({ cargarVelas: async () => [] });
+  estado.zoomY = 1.3;
+
+  alternarPrecision();
+  assert.equal(estado.precision, true);
+  assert.equal(estado.zoomY, 1.25);
+  zoomV('-');
+  assert.equal(estado.zoomY, 1.5, 'con precision el zoom avanza por pasos');
+
+  alternarPrecision();
+  assert.equal(estado.precision, false);
+  assert.equal(estado.zoomY, 1.3);
+});
+
+test('modo tabla se alterna y reiniciarVista vuelve al grafico', () => {
+  const { estado, alternarTabla, reiniciarVista } = crearEstado({ cargarVelas: async () => [] });
+  assert.equal(estado.modoTabla, false);
+  alternarTabla();
+  assert.equal(estado.modoTabla, true);
+  reiniciarVista();
+  assert.equal(estado.modoTabla, false);
+});
+
+test('zoomH sin limite de pantalla respeta el maximo de velas', () => {
+  const { estado, zoomH } = crearEstado({ cargarVelas: async () => [] });
+  estado.zoomX = 155;
+  zoomH('-');
+  assert.equal(estado.zoomX, 160);
+  zoomH('-');
+  assert.equal(estado.zoomX, 160);
+});

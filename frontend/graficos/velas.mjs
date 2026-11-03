@@ -1,6 +1,6 @@
 // arma el grafico de velas como una matriz de celdas para el substrato
 
-import { grid } from '../../backend/terminal/widgets.mjs';
+import { grid, table } from '../../backend/terminal/widgets.mjs';
 import { PALETA } from '../paleta.mjs';
 
 // bloques por octavos para puntas de cuerpos de velas
@@ -25,6 +25,19 @@ export function anchoPlot(width, showAxis = true) {
   const totalW = Math.max(1, Math.floor(width));
   const axisW = showAxis ? Math.min(9, Math.max(0, totalW - 1)) : 0;
   return Math.max(1, totalW - axisW);
+}
+
+// las mismas velas en una tabla, la mas reciente arriba
+export function tablaVelas(velas) {
+  const filas = velas.slice().reverse().map(v => [
+    new Date(v.open_time).toLocaleTimeString('es-AR'),
+    v.open,
+    v.high,
+    v.low,
+    v.close,
+    v.volume
+  ]);
+  return table({ headers: ['hora', 'open', 'high', 'low', 'close', 'vol'], rows: filas, fill: true, align: 'center' });
 }
 
 export function limitarVelas(velas, capacidad) {

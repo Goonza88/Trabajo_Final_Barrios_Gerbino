@@ -1,6 +1,9 @@
 import { cargarVelas as pedirVelas, cargarTickers as pedirTickers } from '../../backend/dominio/mercado.mjs';
 import { calcularIndicadores, calcularVariacion } from '../../backend/dominio/indicadores.mjs';
 
+// limites del zoom horizontal, en velas visibles
+const ZOOM_X = Object.freeze({ min: 20, max: 160, paso: 5 });
+
 export function crearEstado({
   symbol = 'BTCUSDT',
   simbolos = [symbol],
@@ -38,6 +41,7 @@ export function crearEstado({
     offset: 0,
     offsetY: 0,
     precision: false,
+    modoTabla: false,
     indicadores: { sma: false, ema: false, rsi: false, volume: false, bollinger: true },
     zoomYBeforePrecision: null,
     zoomYSnap: [0.4, 0.5, 0.6, 0.8, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0]
@@ -191,11 +195,12 @@ export function crearEstado({
     }
   }
 
-  function zoomH(dir, maxVisible = 160) {
-    const upper = Math.max(20, Math.min(160, Math.floor(maxVisible)));
-    const actual = Math.max(20, Math.min(estado.zoomX, upper));
-    if (dir === '+') estado.zoomX = Math.max(20, actual - 5);
-    if (dir === '-') estado.zoomX = Math.min(upper, actual + 5);
+  // maxVisible es lo que entra en pantalla - sin limite de pantalla rige ZOOM_X.max
+  function zoomH(dir, maxVisible = Infinity) {
+    const upper = Math.max(ZOOM_X.min, Math.min(ZOOM_X.max, Math.floor(maxVisible)));
+    const actual = Math.max(ZOOM_X.min, Math.min(estado.zoomX, upper));
+    if (dir === '+') estado.zoomX = Math.max(ZOOM_X.min, actual - ZOOM_X.paso);
+    if (dir === '-') estado.zoomX = Math.min(upper, actual + ZOOM_X.paso);
   }
 
   function zoomV(dir) {
@@ -213,6 +218,29 @@ export function crearEstado({
     }
     if (dir === '+') estado.zoomY = Math.max(0.4, estado.zoomY - 0.1);
     if (dir === '-') estado.zoomY = Math.min(3, estado.zoomY + 0.1);
+  }
+
+  // la precision fija el zoom vertical al paso mas cercano y al salir vuelve al zoom previo
+  function alternarPrecision() {
+    if (estado.precision) {
+      if (estado.zoomYBeforePrecision != null) estado.zoomY = estado.zoomYBeforePrecision;
+      estado.zoomYBeforePrecision = null;
+      estado.precision = false;
+      return;
+    }
+    estado.zoomYBeforePrecision = estado.zoomY;
+    estado.precision = true;
+    estado.zoomY = estado.zoomYSnap.reduce((mejor, paso) =>
+      Math.abs(paso - estado.zoomY) < Math.abs(mejor - estado.zoomY) ? paso : mejor);
+  }
+
+  function alternarTabla() {
+    estado.modoTabla = !estado.modoTabla;
+  }
+
+  // al volver a entrar a la vista arranca en el grafico
+  function reiniciarVista() {
+    estado.modoTabla = false;
   }
 
   function mover(dir, cantidadVisible = estado.zoomX) {
@@ -243,6 +271,9 @@ export function crearEstado({
     alternarIndicador,
     zoomH,
     zoomV,
+    alternarPrecision,
+    alternarTabla,
+    reiniciarVista,
     mover,
     cancelar
   };

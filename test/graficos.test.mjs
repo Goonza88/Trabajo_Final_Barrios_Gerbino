@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 import { flatten } from '../backend/terminal/view.mjs';
 import { sanitize, toAnsi } from '../backend/terminal/ansi.mjs';
 import { anchoPlot, graficoVelas, limitarVelas } from '../frontend/graficos/velas.mjs';
-import { capacidadVelas, cantidadVelasVisibles, ventanaVelas, vistaMercado } from '../frontend/vistas/mercado.mjs';
-import { anchoWatchlist, lineasAyuda, vistaWatchlist } from '../frontend/features/watchlist.mjs';
+import { capacidadVelas, cantidadVelasVisibles, lineasAyuda, ventanaVelas, vistaMonitor } from '../frontend/vistas/monitor.mjs';
+import { anchoWatchlist, vistaWatchlist } from '../frontend/features/watchlist.mjs';
 import { calcularIndicadores } from '../backend/dominio/indicadores.mjs';
 
 const BLOQUES = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
@@ -263,9 +263,9 @@ test('la capacidad depende del ancho y modo tabla conserva ventana', () => {
   const capacidad = capacidadVelas(estado, 80);
 
   assert.ok(capacidad > 0 && capacidad < estado.zoomX);
-  assert.equal(cantidadVelasVisibles(estado, false, 80), capacidad);
-  assert.equal(cantidadVelasVisibles({ ...estado, zoomX: 20 }, false, 80), 20);
-  assert.equal(cantidadVelasVisibles(estado, true, 80), 80);
+  assert.equal(cantidadVelasVisibles(estado, 80), capacidad);
+  assert.equal(cantidadVelasVisibles({ ...estado, zoomX: 20 }, 80), 20);
+  assert.equal(cantidadVelasVisibles({ ...estado, modoTabla: true }, 80), 80);
 });
 
 test('la ventana muestra velas consecutivas', () => {
@@ -278,7 +278,7 @@ test('la ventana muestra velas consecutivas', () => {
 
 test('el monitor muestra velas consecutivas hasta el maximo que entra', () => {
   const estado = { zoomX: 80, intervalos: ['1m', '5m', '1h', '4h', '1d'] };
-  const capacidad = cantidadVelasVisibles(estado, false, 80);
+  const capacidad = cantidadVelasVisibles(estado, 80);
   const fuente = velas(capacidad * 2);
   const visibles = ventanaVelas(fuente, capacidad);
 
@@ -287,7 +287,7 @@ test('el monitor muestra velas consecutivas hasta el maximo que entra', () => {
   assert.ok(visibles.every((vela, i) => i === 0 || vela.open_time - visibles[i - 1].open_time === 60000));
 });
 
-test('vistaMercado compone watchlist y grafico sin romper', () => {
+test('vistaMonitor compone watchlist y grafico sin romper', () => {
   const estado = {
     symbol: 'BTCUSDT',
     simbolos: ['BTCUSDT', 'ETHUSDT'],
@@ -310,18 +310,20 @@ test('vistaMercado compone watchlist y grafico sin romper', () => {
     zoomY: 1,
     offsetY: 0,
     precision: false,
+    modoTabla: false,
+    intervalos: ['1m', '5m', '1h', '4h', '1d'],
   };
-  const lineas = flatten(vistaMercado(estado), 80, 24);
+  const lineas = flatten(vistaMonitor(estado), 80, 24);
   const texto = sanitize(lineas.map(linea => linea.content).join('\n'));
   assert.match(texto, /watchlist/);
   assert.match(texto, /BTCUSDT/);
   assert.match(texto, /ETHUSDT/);
   assert.match(texto, /\+11\.00%/);
   assert.match(texto, /-10\.00%/);
-  assert.doesNotThrow(() => flatten(vistaMercado({ ...estado, tickers: Object.values(estado.tickers), foco: 'grafico' }, true), 80, 24));
+  assert.doesNotThrow(() => flatten(vistaMonitor({ ...estado, tickers: Object.values(estado.tickers), foco: 'grafico', modoTabla: true }), 80, 24));
 });
 
-test('watchlist arma una ayuda por keybind y calcula el ancho para no cortarlas', () => {
+test('el monitor arma una ayuda por atajo y la watchlist calcula el ancho para no cortarlas', () => {
   const ayudas = lineasAyuda(['1m', '5m', '1h', '4h', '1d']);
   assert.deepEqual(ayudas, [
     'Enter - Seleccionar',
@@ -348,7 +350,7 @@ test('watchlist arma una ayuda por keybind y calcula el ancho para no cortarlas'
     '',
     'q - Volver'
   ]);
-  const ancho = anchoWatchlist({ intervalos: ['1m', '5m', '1h', '4h', '1d'] });
+  const ancho = anchoWatchlist(ayudas);
   assert.ok(ancho >= Math.max(...ayudas.map(linea => linea.length)) + 4);
 });
 
@@ -366,12 +368,13 @@ test('watchlist pega las ayudas al fondo y colorea la variacion 24h', () => {
     foco: 'watchlist',
     intervalos: ['1m', '5m', '1h', '4h', '1d']
   };
-  const ancho = anchoWatchlist(estado);
-  const lineas = flatten(vistaWatchlist(estado, { width: ancho, height: 24 }), ancho, 24);
+  const ayuda = lineasAyuda(estado.intervalos);
+  const ancho = anchoWatchlist(ayuda);
+  const lineas = flatten(vistaWatchlist(estado, { width: ancho, height: 24, ayuda }), ancho, 24);
   const texto = lineas.map(linea => sanitize(linea.content));
 
-  for (const ayuda of lineasAyuda(estado.intervalos).filter(Boolean)) {
-    assert.ok(texto.some(linea => linea.includes(ayuda)), 'falta la ayuda: ' + ayuda);
+  for (const linea of ayuda.filter(Boolean)) {
+    assert.ok(texto.some(t => t.includes(linea)), 'falta la ayuda: ' + linea);
   }
   assert.match(texto[22], /q - Volver/);
   assert.match(texto[23], /╰/);
@@ -398,13 +401,14 @@ test('watchlist muestra secciones completas cuando la terminal tiene altura', ()
     foco: 'watchlist',
     intervalos: ['1m', '5m', '1h', '4h', '1d']
   };
-  const ancho = anchoWatchlist(estado);
-  const lineas = flatten(vistaWatchlist(estado, { width: ancho, height: 32 }), ancho, 32);
+  const ayuda = lineasAyuda(estado.intervalos);
+  const ancho = anchoWatchlist(ayuda);
+  const lineas = flatten(vistaWatchlist(estado, { width: ancho, height: 32, ayuda }), ancho, 32);
   const texto = lineas.map(linea => sanitize(linea.content));
   const fin = texto.findIndex(linea => linea.includes('╰'));
 
-  for (const ayuda of lineasAyuda(estado.intervalos).filter(Boolean)) {
-    assert.ok(texto.some(linea => linea.includes(ayuda)), 'falta la ayuda: ' + ayuda);
+  for (const linea of ayuda.filter(Boolean)) {
+    assert.ok(texto.some(t => t.includes(linea)), 'falta la ayuda: ' + linea);
   }
   assert.match(texto[fin - 1], /q - Volver/);
   assert.equal(texto.length, 32);
