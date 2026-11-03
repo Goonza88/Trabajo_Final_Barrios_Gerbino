@@ -1,3 +1,5 @@
+// watchlist y ticker con precio en vivo y variacion de 24h
+
 import { box, gap, rows, table, text } from '../../backend/terminal/widgets.mjs';
 import { boxSize } from '../../backend/terminal/layout.mjs';
 import { sanitize, textWidth } from '../../backend/terminal/ansi.mjs';

@@ -1,3 +1,5 @@
+// conector REST de binance - pide velas y tickers de 24h
+
 const BASE_URL = 'https://data-api.binance.vision/api/v3';
 const TIMEOUT_MS = 10000;
 

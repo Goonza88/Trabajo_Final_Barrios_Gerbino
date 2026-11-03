@@ -38,7 +38,7 @@ El dominio no usa `Number` para valores monetarios. En `backend/metricas` se imp
 
 Cuando un usuario guarda un decimal (`alerta.valor`, `operacion.cantidad`, etc), el dominio realiza la validacion antes de escribir: si no son digitos con un punto y hasta ocho decimales, rechaza la carga en vez de redondearse, sin iniciar la escritura. El `CHECK` es solo la ultima barrera, que rechaza en la persistencia, y queda como garantia de que ninguna fila guardada lo incumpla.
 
-La escala se implementa en una constante, y como lo guardado es el texto original, subirla o modificarla mas adelante es un cambio simple de codigo, no una migracion o transformacion sobre los datos.
+La escala se implementa en una constante para cada capa, y como lo guardado es el texto original, subirla o modificarla mas adelante es un cambio simple de codigo que no transforma los datos, aunque las bases ya creadas necesitan una migracion que actualice el `CHECK`.
 
 ## Diagrama
 

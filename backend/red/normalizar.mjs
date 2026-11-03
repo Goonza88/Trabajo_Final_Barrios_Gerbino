@@ -1,3 +1,5 @@
+// transforma respuestas de binance al formato interno - decimales simples sin notacion cientifica
+
 const DECIMAL = /^\d+(?:\.\d{1,8})?$/;
 
 // expande la notacion cientifica de un number sin perder digitos

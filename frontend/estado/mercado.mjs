@@ -1,3 +1,5 @@
+// estado de sesion de mercado - simbolo, intervalo, watchlist, vista y cargas en segundo plano
+
 import { cargarVelas as pedirVelas, cargarTickers as pedirTickers } from '../../backend/dominio/mercado.mjs';
 import { calcularIndicadores, calcularVariacion } from '../../backend/dominio/indicadores.mjs';
 
