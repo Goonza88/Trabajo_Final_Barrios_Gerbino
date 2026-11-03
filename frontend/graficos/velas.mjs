@@ -2,8 +2,7 @@
 
 import { grid, table } from '../../backend/terminal/widgets.mjs';
 
-// velas por mitades de fila - linea fina para la mecha y gruesa para el cuerpo
-// la clave es lo que ocupa la mitad de arriba y la de abajo de la celda
+// velas por mitades de fila
 const TRAZOS = {
   'mecha,': '╵',
   ',mecha': '╷',
@@ -33,13 +32,13 @@ export function anchoPlot(width, showAxis = true) {
   return Math.max(1, totalW - anchoEje(totalW, showAxis));
 }
 
-// volumen con la parte entera en al menos dos digitos, para que 9.5 quede como 09.5
+// volumen con la parte entera en al menos dos digitos
 function fmtVolumen(valor) {
   const [entera, ...decimales] = String(valor).split('.');
   return [entera.padStart(2, '0'), ...decimales].join('.');
 }
 
-// las mismas velas en una tabla, la mas reciente arriba - los valores van del color de la vela
+// mismas velas en una tabla, la mas reciente arriba - valores del color de la vela
 export function tablaVelas(velas) {
   const filas = velas.slice().reverse().map(v => {
     const style = { fg: Number(v.close) >= Number(v.open) ? 'success' : 'danger' };
@@ -104,7 +103,8 @@ function dibujarEscalon(plot, valores, colForIndex, filaParaValor, style) {
       continue;
     }
 
-    for (let x = anterior.col; x < col; x++) celdaLinea(plot, anterior.row, x, '─', style);
+    // arranca despues del punto anterior para no pisar su esquina
+    for (let x = anterior.col + 1; x < col; x++) celdaLinea(plot, anterior.row, x, '─', style);
     if (row === anterior.row) {
       celdaLinea(plot, row, col, '─', style);
     } else {
@@ -112,8 +112,8 @@ function dibujarEscalon(plot, valores, colForIndex, filaParaValor, style) {
       const abajo = Math.max(row, anterior.row);
       for (let y = arriba + 1; y < abajo; y++) celdaLinea(plot, y, col, '│', style);
       const baja = row > anterior.row;
-      celdaLinea(plot, anterior.row, col, baja ? '┐' : '┘', style);
-      celdaLinea(plot, row, col, baja ? '└' : '┌', style);
+      celdaLinea(plot, anterior.row, col, baja ? '╮' : '╯', style);
+      celdaLinea(plot, row, col, baja ? '╰' : '╭', style);
     }
     anterior = { row, col };
   }
@@ -300,13 +300,10 @@ export function graficoVelas({
     }
   }
 
-  // limite de media fila mas cercano a una posicion - la mitad s va del limite s al s + 1,
-  // y la fila r tiene las mitades 2r (arriba) y 2r + 1 (abajo)
+  // limite de media fila mas cercano a posicion - mitad s va a s + 1 y fila r a 2r o 2r + 1
   const limiteMitad = (p) => Math.round((p + 0.5) * 2);
 
-  // una o dos formas de dibujar el cuerpo - si apertura y cierre caen en el mismo limite y es el
-  // medio de una fila, el cuerpo es una raya sin alto; si es el borde entre dos filas, ocupa la media
-  // fila de arriba o la de abajo, y la eleccion la hace elegirCuerpos
+  // dos formas de dibujar el cuerpo segun donde caen los limites
   function estadosCuerpo(pO, pC) {
     if (!Number.isFinite(pO) || !Number.isFinite(pC)) {
       return [{ inicio: NaN, fin: NaN, open: NaN, close: NaN, local: 0 }];

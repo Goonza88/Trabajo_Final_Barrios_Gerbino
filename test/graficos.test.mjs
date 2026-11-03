@@ -9,7 +9,7 @@ import { capacidadVelas, cantidadVelasVisibles, rangoVentanaVelas, seccionesAyud
 import { crearEstado } from '../frontend/estado/mercado.mjs';
 import { anchoWatchlist, vistaWatchlist } from '../frontend/features/watchlist.mjs';
 
-// mitades de arriba y de abajo de cada trazo, y las rayas de un cuerpo sin alto
+// mitades de arriba y abajo de cada trazo y lineas de cuerpo sin alto
 const MITADES = {
   '╵': ['mecha', ''], '╷': ['', 'mecha'], '│': ['mecha', 'mecha'],
   '╹': ['cuerpo', ''], '╻': ['', 'cuerpo'], '┃': ['cuerpo', 'cuerpo'],
@@ -17,8 +17,7 @@ const MITADES = {
 };
 const RAYAS = { '┿': ['mecha', 'mecha'], '┷': ['mecha', ''], '┯': ['', 'mecha'], '━': ['', ''] };
 
-// lee una columna del grafico - bordes del cuerpo en filas (el limite de arriba de la fila r es
-// r - 0.5) y si mecha y cuerpo forman una sola linea sin huecos
+// lee columna del grafico - bordes en filas y si mecha y cuerpo no dejan huecos
 function leerVela(node, col) {
   const mitades = [];
   let raya = null;
@@ -222,6 +221,32 @@ test('un cuerpo corto entre dos cuerpos largos empalma al menos un lado', () => 
   const salida = Math.abs(segunda.top - tercera.top);
   assert.ok(Math.max(entrada, salida) <= 0.5);
   assert.equal(Math.min(entrada, salida), 0);
+});
+
+test('las lineas de indicadores no dejan huecos en sus esquinas', () => {
+  const node = graficoVelas({
+    velas: velas(4),
+    width: 4,
+    height: 12,
+    showAxis: false,
+    indicadores: { rsi: [0, 100, 0, 100] },
+  });
+  // hacia donde sale cada trazo, y el trazo vecino tiene que entrar desde el lado opuesto
+  const salidas = { '─': 'izq der', '│': 'arr aba', '╮': 'izq aba', '╯': 'izq arr', '╰': 'arr der', '╭': 'aba der' };
+  const pasos = { izq: [0, -1, 'der'], der: [0, 1, 'izq'], arr: [-1, 0, 'aba'], aba: [1, 0, 'arr'] };
+  const titulo = node.cells.findIndex(fila => fila[0]?.ch === 'R');
+  const carril = node.cells.slice(titulo + 1);
+  const trazos = carril.flatMap((fila, row) => fila.flatMap((celda, col) => salidas[celda?.ch] ? [{ row, col, ch: celda.ch }] : []));
+
+  assert.ok(trazos.some(trazo => trazo.ch === '╭') && trazos.some(trazo => trazo.ch === '╯'));
+  for (const { row, col, ch } of trazos) {
+    for (const lado of salidas[ch].split(' ')) {
+      const [dy, dx, opuesto] = pasos[lado];
+      const vecino = carril[row + dy]?.[col + dx];
+      if (col + dx < 0 || col + dx > 3) continue;
+      assert.ok(vecino && salidas[vecino.ch]?.includes(opuesto), ch + ' en ' + row + ',' + col + ' no conecta hacia ' + lado);
+    }
+  }
 });
 
 test('graficoVelas sin velas ocupa el grid y avisa', () => {

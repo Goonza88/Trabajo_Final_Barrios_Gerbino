@@ -13,7 +13,7 @@ import { anchoWatchlist, fmtPrecio, fmtVariacion, vistaWatchlist } from '../feat
 
 const TECLAS_INTERVALO = ['a', 's', 'd', 'f', 'g'];
 
-// cada indicador con su tecla, su nombre en la ayuda y su etiqueta con los parametros de la serie
+// cada indicador con su tecla, su nombre y su etiqueta con los parametros de la serie
 const INDICADORES = [
   { tecla: '1', nombre: 'sma', titulo: 'Media Simple', etiqueta: serie => 'SMA' + serie.periodo },
   { tecla: '2', nombre: 'ema', titulo: 'Media Exponencial', etiqueta: serie => 'EMA' + serie.periodo },
@@ -35,8 +35,7 @@ const enGrafico = accion => monitor => {
 // rango de teclas para la ayuda resumida de una seccion, como 'h-l'
 const rango = teclas => teclas[0] + '-' + teclas.at(-1);
 
-// atajos por seccion - cada uno con sus teclas, su ayuda y su accion, y la seccion con su resumen
-// si la ayuda puede plegarse a una sola linea
+// atajos por seccion - cada uno con teclas, ayuda y accion, y la seccion con resumen
 function atajos(intervalos = []) {
   const teclasIntervalo = TECLAS_INTERVALO.slice(0, intervalos.length);
   return [

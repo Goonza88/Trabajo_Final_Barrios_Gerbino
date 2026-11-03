@@ -22,8 +22,7 @@ export function anchoWatchlist(ayuda = []) {
   return Math.max(30, ...lineas.map(linea => textWidth(linea) + 4));
 }
 
-// formas de la ayuda de la mas larga a la mas corta - primero sin lineas vacias entre secciones,
-// despues plegando las secciones a su resumen de arriba hacia abajo
+// formas de la ayuda - sin lineas vacias > plegando secciones
 function formasAyuda(secciones) {
   const armar = (plegadas, separar) => {
     let resto = plegadas;

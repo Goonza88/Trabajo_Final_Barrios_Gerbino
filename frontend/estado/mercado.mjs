@@ -48,8 +48,7 @@ export function crearEstado({
     indicadores: { sma: false, ema: false, rsi: false, volume: false, bollinger: true }
   };
 
-  // carga en segundo plano - la nueva cancela a la anterior y una respuesta vieja no pisa a la nueva
-  // con reemplazar en false reusa la que esta en curso
+  // carga en segundo plano - nueva cancela anterior y una respuesta vieja no pisa nueva
   function crearCarga(pedir, aplicar, fallar) {
     let ultima = 0;
     let abortar = null;
@@ -68,6 +67,7 @@ export function crearEstado({
       return estado;
     }
 
+    // reemplazar false usa request en curso
     function cargar({ reemplazar = true } = {}) {
       if (!reemplazar && enCurso) return enCurso;
       abortar?.abort();
