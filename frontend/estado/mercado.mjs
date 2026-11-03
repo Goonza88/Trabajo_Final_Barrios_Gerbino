@@ -1,4 +1,5 @@
 import { cargarVelas as pedirVelas, cargarTickers as pedirTickers } from '../../backend/dominio/mercado.mjs';
+import { calcularIndicadores, calcularVariacion } from '../../backend/dominio/indicadores.mjs';
 
 export function crearEstado({
   symbol = 'BTCUSDT',
@@ -21,7 +22,9 @@ export function crearEstado({
     interval,
     limite,
     velas: [],
+    series: calcularIndicadores([]),
     tickers: {},
+    variaciones: {},
     tickers_error: null,
     tickers_actualizado_en: null,
     cursor: Math.max(0, lista.indexOf(inicial)),
@@ -58,6 +61,7 @@ export function crearEstado({
       });
       if (id !== carga || control.signal.aborted) return estado;
       estado.velas = norm;
+      estado.series = calcularIndicadores(norm);
       const last = estado.velas[estado.velas.length - 1];
       estado.ultimo = last ? last.close : null;
       estado.actualizado_en = Date.now();
@@ -94,10 +98,14 @@ export function crearEstado({
       });
       if (id !== cargaTickers || control.signal.aborted) return estado;
       const mapa = {};
+      const variaciones = {};
       for (const ticker of norm || []) {
-        if (ticker && estado.simbolos.includes(ticker.symbol)) mapa[ticker.symbol] = ticker;
+        if (!ticker || !estado.simbolos.includes(ticker.symbol)) continue;
+        mapa[ticker.symbol] = ticker;
+        variaciones[ticker.symbol] = calcularVariacion(ticker);
       }
       estado.tickers = mapa;
+      estado.variaciones = variaciones;
       estado.tickers_error = null;
       estado.tickers_actualizado_en = Date.now();
       return estado;

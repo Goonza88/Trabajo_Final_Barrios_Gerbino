@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { crearCargarVelas, crearCargarTickers } from '../backend/dominio/mercado.mjs';
+import { calcularIndicadores, calcularVariacion } from '../backend/dominio/indicadores.mjs';
 
 test('cargarVelas delega en el conector y normaliza la respuesta', async () => {
   const llamadas = [];
@@ -103,4 +104,35 @@ test('cargarTickers rechaza un exchange desconocido', async () => {
     () => cargarTickers({ exchange_id: 'otro', symbols: ['BTCUSDT'] }),
     /exchange no soportado: otro/
   );
+});
+
+test('calcularIndicadores entrega cada serie con sus parametros', () => {
+  const velas = Array.from({ length: 30 }, (_, i) => ({ close: String(100 + i), volume: '2' }));
+  const series = calcularIndicadores(velas);
+
+  assert.equal(series.sma.periodo, 20);
+  assert.equal(series.ema.periodo, 20);
+  assert.equal(series.rsi.periodo, 14);
+  assert.equal(series.bollinger.periodo, 20);
+  assert.equal(series.bollinger.desviaciones, 2);
+  for (const valores of [series.sma.valores, series.ema.valores, series.rsi.valores, series.volume.valores,
+    series.bollinger.middle, series.bollinger.upper, series.bollinger.lower]) {
+    assert.equal(valores.length, velas.length);
+  }
+  assert.equal(series.sma.valores[19], 109.5);
+  assert.equal(series.volume.valores[0], 2);
+});
+
+test('calcularIndicadores sin velas conserva los parametros', () => {
+  const series = calcularIndicadores([]);
+  assert.equal(series.sma.periodo, 20);
+  assert.deepEqual(series.sma.valores, []);
+});
+
+test('calcularVariacion compara el precio con la apertura de 24h', () => {
+  assert.equal(calcularVariacion({ price: '111', open_24h: '100' }).toFixed(2), '11.00');
+  assert.equal(calcularVariacion({ price: '90', open_24h: '100' }), -10);
+  assert.equal(calcularVariacion({ price: '90', open_24h: null }), null);
+  assert.equal(calcularVariacion({ price: '90', open_24h: '0' }), null);
+  assert.equal(calcularVariacion(null), null);
 });

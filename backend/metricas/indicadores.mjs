@@ -1,12 +1,4 @@
-// indicadores tecnicos calculados sobre valores de mercado (senales, no dinero)
-
-export const PERIODOS_INDICADORES = Object.freeze({
-  sma: 20,
-  ema: 20,
-  rsi: 14,
-  bollinger: 20,
-  bollingerDesviaciones: 2,
-});
+// indicadores tecnicos calculados sobre valores de mercado (señales, no $)
 
 function periodoValido(periodo) {
   if (!Number.isSafeInteger(periodo) || periodo < 1) {
@@ -151,13 +143,10 @@ export function bollinger(valores, periodo = 20, desviaciones = 2) {
   return { middle, upper, lower };
 }
 
-export function calcularIndicadores(velas) {
-  const cierres = velas.map(vela => vela.close);
-  return {
-    sma: sma(cierres, PERIODOS_INDICADORES.sma),
-    ema: ema(cierres, PERIODOS_INDICADORES.ema),
-    rsi: rsi(cierres, PERIODOS_INDICADORES.rsi),
-    bollinger: bollinger(cierres, PERIODOS_INDICADORES.bollinger, PERIODOS_INDICADORES.bollingerDesviaciones),
-    volume: velas.map(vela => numero(vela.volume)),
-  };
+// variacion porcentual de un valor contra base - null si falta alguno o la base es cero
+export function variacionPorcentual(actual, base) {
+  if (actual == null || base == null) return null;
+  const a = numero(actual), b = numero(base);
+  if (a == null || b == null || b === 0) return null;
+  return ((a - b) / b) * 100;
 }

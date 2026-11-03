@@ -1,26 +1,15 @@
 import { box, gap, rows, table, text } from '../../backend/terminal/widgets.mjs';
 import { boxSize } from '../../backend/terminal/layout.mjs';
 import { sanitize, textWidth } from '../../backend/terminal/ansi.mjs';
-import { formatear, parse } from '../../backend/metricas/decimal.mjs';
 
 const TECLAS_INTERVALO = ['a', 's', 'd', 'f', 'g'];
 const INTERVALOS_DEFECTO = ['1m', '5m', '1h', '4h', '1d'];
 
+// el dominio entrega decimales simples - para mostrarlos se sacan los ceros de mas
 export function fmtPrecio(precio) {
   if (precio == null) return '-';
-  try {
-    return formatear(parse(String(precio)));
-  } catch {
-    return String(precio);
-  }
-}
-
-export function variacion(ticker) {
-  if (!ticker || ticker.price == null || ticker.open_24h == null) return null;
-  const precio = Number(ticker.price);
-  const apertura = Number(ticker.open_24h);
-  if (!Number.isFinite(precio) || !Number.isFinite(apertura) || apertura === 0) return null;
-  return ((precio - apertura) / apertura) * 100;
+  const texto = String(precio);
+  return texto.includes('.') ? texto.replace(/\.?0+$/, '') : texto;
 }
 
 export function fmtVariacion(valor) {
@@ -89,7 +78,7 @@ export function vistaWatchlist(estado, { width = 26, height = 10 } = {}) {
   const visibles = maxFilas > 0 ? simbolos.slice(inicio, inicio + maxFilas) : [];
   const filas = visibles.map((symbol, i) => {
     const ticker = tickers[symbol];
-    const valor = variacion(ticker);
+    const valor = estado.variaciones[symbol] ?? null;
     const estiloValor = valor == null || valor === 0 ? null : { fg: valor > 0 ? 'success' : 'danger' };
     const estiloFila = inicio + i === cursor ? { fg: 'accent' } : null;
     return [

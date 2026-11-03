@@ -7,6 +7,7 @@ import { sanitize, toAnsi } from '../backend/terminal/ansi.mjs';
 import { anchoPlot, graficoVelas, limitarVelas } from '../frontend/graficos/velas.mjs';
 import { capacidadVelas, cantidadVelasVisibles, ventanaVelas, vistaMercado } from '../frontend/vistas/mercado.mjs';
 import { anchoWatchlist, lineasAyuda, vistaWatchlist } from '../frontend/features/watchlist.mjs';
+import { calcularIndicadores } from '../backend/dominio/indicadores.mjs';
 
 const BLOQUES = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 
@@ -294,11 +295,13 @@ test('vistaMercado compone watchlist y grafico sin romper', () => {
       BTCUSDT: { symbol: 'BTCUSDT', price: '111', open_24h: '100' },
       ETHUSDT: { symbol: 'ETHUSDT', price: '180', open_24h: '200' }
     },
+    variaciones: { BTCUSDT: 11, ETHUSDT: -10 },
     tickers_error: null,
     cursor: 0,
     foco: 'watchlist',
     interval: '1m',
     velas: velas(12),
+    series: calcularIndicadores(velas(12)),
     error: null,
     ultimo: '111',
     actualizado_en: Date.now(),
@@ -357,6 +360,7 @@ test('watchlist pega las ayudas al fondo y colorea la variacion 24h', () => {
       BTCUSDT: { symbol: 'BTCUSDT', price: '111', open_24h: '100' },
       ETHUSDT: { symbol: 'ETHUSDT', price: '180', open_24h: '200' }
     },
+    variaciones: { BTCUSDT: 11, ETHUSDT: -10 },
     tickers_error: null,
     cursor: 0,
     foco: 'watchlist',
@@ -388,6 +392,7 @@ test('watchlist muestra secciones completas cuando la terminal tiene altura', ()
       BTCUSDT: { symbol: 'BTCUSDT', price: '111', open_24h: '100' },
       ETHUSDT: { symbol: 'ETHUSDT', price: '180', open_24h: '200' }
     },
+    variaciones: { BTCUSDT: 11, ETHUSDT: -10 },
     tickers_error: null,
     cursor: 0,
     foco: 'watchlist',

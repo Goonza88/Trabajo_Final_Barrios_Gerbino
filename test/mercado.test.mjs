@@ -301,3 +301,25 @@ test('cancelar descarta tambien la respuesta de tickers', async () => {
   assert.deepEqual(estado.tickers, {});
   assert.equal(estado.tickers_error, null);
 });
+
+test('cargar deja las series de indicadores de las velas nuevas', async () => {
+  const { estado, cargar } = crearEstado({
+    cargarVelas: async () => Array.from({ length: 25 }, (_, i) => vela(i, String(100 + i)))
+  });
+  assert.deepEqual(estado.series.sma.valores, []);
+
+  await cargar();
+  assert.equal(estado.series.sma.valores.length, 25);
+  assert.equal(estado.series.sma.valores[24], 114.5);
+});
+
+test('cargarTickers deja la variacion de 24h de cada simbolo', async () => {
+  const { estado, cargarTickers } = crearEstado({
+    simbolos: ['BTCUSDT', 'ETHUSDT'],
+    cargarTickers: async () => [ticker('BTCUSDT', '110', '100'), ticker('ETHUSDT', '90', '100')]
+  });
+
+  await cargarTickers();
+  assert.equal(Math.round(estado.variaciones.BTCUSDT), 10);
+  assert.equal(Math.round(estado.variaciones.ETHUSDT), -10);
+});

@@ -3,8 +3,7 @@ import { size } from '../../backend/terminal/runtime.mjs';
 import { sanitize } from '../../backend/terminal/ansi.mjs';
 import { boxSize } from '../../backend/terminal/layout.mjs';
 import { anchoPlot, graficoVelas } from '../graficos/velas.mjs';
-import { anchoWatchlist, fmtPrecio, fmtVariacion, indiceTickers, variacion, vistaWatchlist } from '../features/watchlist.mjs';
-import { calcularIndicadores, PERIODOS_INDICADORES } from '../../backend/metricas/indicadores.mjs';
+import { anchoWatchlist, fmtPrecio, fmtVariacion, indiceTickers, vistaWatchlist } from '../features/watchlist.mjs';
 
 function fmtHora(ts) {
   if (!ts) return '-';
@@ -45,14 +44,15 @@ export function ventanaVelas(velas, cantidad, offset = 0) {
 }
 
 function leyendaIndicadores(estado) {
+  const { series } = estado;
   const activos = estado.indicadores ?? {};
   const estadoCorto = nombre => activos[nombre] ? '+' : '-';
   return [
-    `1:SMA${PERIODOS_INDICADORES.sma}${estadoCorto('sma')}`,
-    `2:EMA${PERIODOS_INDICADORES.ema}${estadoCorto('ema')}`,
-    `3:RSI${PERIODOS_INDICADORES.rsi}${estadoCorto('rsi')}`,
+    `1:SMA${series.sma.periodo}${estadoCorto('sma')}`,
+    `2:EMA${series.ema.periodo}${estadoCorto('ema')}`,
+    `3:RSI${series.rsi.periodo}${estadoCorto('rsi')}`,
     `4:VOL${estadoCorto('volume')}`,
-    `5:BB${PERIODOS_INDICADORES.bollinger}x${PERIODOS_INDICADORES.bollingerDesviaciones}${estadoCorto('bollinger')}`
+    `5:BB${series.bollinger.periodo}x${series.bollinger.desviaciones}${estadoCorto('bollinger')}`
   ].join(' ');
 }
 
@@ -67,25 +67,24 @@ function panelGrafico(estado, width, height, modoTabla, visibleCount) {
   const error = estado.error ? sanitize(estado.error) : null;
   const { inicio, fin } = rangoVentanaVelas(estado.velas.length, visibleCount, estado.offset);
   const vis = estado.velas.slice(inicio, fin);
+  const { series } = estado;
   const activos = estado.indicadores ?? {};
-  const necesitaCalculo = Object.values(activos).some(Boolean);
-  const calculados = necesitaCalculo ? calcularIndicadores(estado.velas) : null;
   const recortar = valores => valores.slice(inicio, fin);
   const indicadores = {
-    sma: activos.sma ? recortar(calculados.sma) : null,
-    ema: activos.ema ? recortar(calculados.ema) : null,
-    rsi: activos.rsi ? recortar(calculados.rsi) : null,
-    volume: activos.volume ? recortar(calculados.volume) : null,
+    sma: activos.sma ? recortar(series.sma.valores) : null,
+    ema: activos.ema ? recortar(series.ema.valores) : null,
+    rsi: activos.rsi ? recortar(series.rsi.valores) : null,
+    volume: activos.volume ? recortar(series.volume.valores) : null,
     bollinger: activos.bollinger ? {
-      middle: recortar(calculados.bollinger.middle),
-      upper: recortar(calculados.bollinger.upper),
-      lower: recortar(calculados.bollinger.lower),
+      middle: recortar(series.bollinger.middle),
+      upper: recortar(series.bollinger.upper),
+      lower: recortar(series.bollinger.lower),
     } : null,
   };
   const ticker = indiceTickers(estado.tickers)[estado.symbol];
   const precio = estado.ultimo ?? ticker?.price ?? null;
   const cabecera = estado.symbol + ' ' + estado.interval + ' | ' + fmtPrecio(precio)
-    + ' | 24h:' + fmtVariacion(ticker ? variacion(ticker) : null)
+    + ' | 24h:' + fmtVariacion(estado.variaciones[estado.symbol] ?? null)
     + ' | ' + fmtHora(estado.actualizado_en);
 
   if (modoTabla) {
