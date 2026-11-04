@@ -306,9 +306,11 @@ test('la capacidad depende del ancho y modo tabla conserva ventana', () => {
 });
 
 test('la ventana muestra velas consecutivas', () => {
-  assert.deepEqual(rangoVentanaVelas(10, 4), { inicio: 6, fin: 10 });
-  assert.deepEqual(rangoVentanaVelas(10, 4, 2), { inicio: 4, fin: 8 });
-  assert.deepEqual(rangoVentanaVelas(10, 4, 100), { inicio: 0, fin: 4 });
+  assert.deepEqual(rangoVentanaVelas(10, 4), { inicio: 6, fin: 10, vacias: 0 });
+  assert.deepEqual(rangoVentanaVelas(10, 4, 2), { inicio: 4, fin: 8, vacias: 0 });
+  assert.deepEqual(rangoVentanaVelas(10, 4, 100), { inicio: 0, fin: 4, vacias: 0 });
+  assert.deepEqual(rangoVentanaVelas(10, 4, -2), { inicio: 8, fin: 10, vacias: 2 }, 'offset negativo deja lugares vacios');
+  assert.deepEqual(rangoVentanaVelas(10, 4, -100), { inicio: 9, fin: 10, vacias: 3 }, 'siempre queda una vela');
 });
 
 test('el monitor muestra velas consecutivas hasta el maximo que entra', () => {
@@ -398,10 +400,11 @@ test('el monitor arma la ayuda por secciones y la watchlist calcula el ancho par
     { lineas: ['Enter - Seleccionar', 'Tab - Cambiar Foco'], resumen: undefined },
     { lineas: ['h - Izquierda', 'j - Abajo', 'k - Arriba', 'l - Derecha'], resumen: 'h-l - Desplazar' },
     { lineas: ['y - Alejar Horizontal', 'u - Alejar Vertical', 'i - Acercar Vertical', 'o - Acercar Horizontal'], resumen: 'y-o - Zoom' },
-    { lineas: ['t - Vista de Tabla'], resumen: undefined },
+    { lineas: ['q - Take Profit', 'w - Entrada', 'e - Stop Loss', 'r - Mercado o Limite'], resumen: 'q-r - Operacion' },
     { lineas: ['a - Intervalo 1m', 's - Intervalo 5m', 'd - Intervalo 1h', 'f - Intervalo 4h', 'g - Intervalo 1d'], resumen: 'a-g - Intervalos' },
+    { lineas: ['z - Vista de Tabla', 'x - Iniciar Mira', 'c - Descartar Accion'], resumen: undefined },
     { lineas: ['1 - Media Simple', '2 - Media Exponencial', '3 - RSI', '4 - Volumen', '5 - Bandas de Bollinger'], resumen: '1-5 - Indicadores' },
-    { lineas: ['q - Volver'], resumen: undefined },
+    { lineas: ['Esc - Volver'], resumen: undefined },
   ]);
   const ancho = anchoWatchlist(secciones);
   const lineas = secciones.flatMap(seccion => seccion.lineas);
@@ -438,9 +441,10 @@ test('la ayuda pliega sus secciones de arriba hacia abajo hasta que entran todos
   assert.ok(muchos.every(symbol => texto.some(t => t.includes(symbol))), 'entran todos los simbolos');
   assert.ok(texto.some(t => t.includes('h-l - Desplazar')));
   assert.ok(texto.some(t => t.includes('y-o - Zoom')));
-  assert.ok(texto.some(t => t.includes('a - Intervalo 1m')), 'los intervalos siguen completos');
+  assert.ok(texto.some(t => t.includes('q-r - Operacion')) && texto.some(t => t.includes('a-g - Intervalos')));
+  assert.ok(texto.some(t => t.includes('1 - Media Simple')), 'los indicadores siguen completos');
   assert.ok(!texto.some(t => t.includes('h - Izquierda')));
-  assert.ok(texto.some(t => t.includes('Enter - Seleccionar')) && texto.some(t => t.includes('t - Vista de Tabla')));
+  assert.ok(texto.some(t => t.includes('Enter - Seleccionar')) && texto.some(t => t.includes('z - Vista de Tabla')));
 
   const todos = Array.from({ length: 40 }, (_, i) => 'SIM' + i + 'USDT');
   const plegada = textoWatchlist(estadoWatchlist(todos), 32).texto;
@@ -452,10 +456,10 @@ test('la ayuda pliega sus secciones de arriba hacia abajo hasta que entran todos
 test('watchlist pega las ayudas al fondo y colorea la variacion 24h', () => {
   const { lineas, texto } = textoWatchlist(estadoWatchlist(['BTCUSDT', 'ETHUSDT']), 24);
 
-  for (const linea of ['h-l - Desplazar', 'y-o - Zoom', 'a - Intervalo 1m', '5 - Bandas de Bollinger']) {
+  for (const linea of ['h-l - Desplazar', 'y-o - Zoom', 'q-r - Operacion', 'a-g - Intervalos', '5 - Bandas de Bollinger']) {
     assert.ok(texto.some(t => t.includes(linea)), 'falta la ayuda: ' + linea);
   }
-  assert.match(texto[22], /q - Volver/);
+  assert.match(texto[22], /Esc - Volver/);
   assert.match(texto[23], /╰/);
 
   const btc = lineas.find(linea => sanitize(linea.content).includes('BTCUSDT'));
@@ -467,15 +471,15 @@ test('watchlist pega las ayudas al fondo y colorea la variacion 24h', () => {
 });
 
 test('watchlist muestra secciones completas cuando la terminal tiene altura', () => {
-  const { texto } = textoWatchlist(estadoWatchlist(['BTCUSDT', 'ETHUSDT']), 36);
+  const { texto } = textoWatchlist(estadoWatchlist(['BTCUSDT', 'ETHUSDT']), 44);
   const fin = texto.findIndex(linea => linea.includes('╰'));
 
   for (const linea of seccionesAyuda(['1m', '5m', '1h', '4h', '1d']).flatMap(seccion => seccion.lineas)) {
     assert.ok(texto.some(t => t.includes(linea)), 'falta la ayuda: ' + linea);
   }
   assert.equal(texto[fin - 2].trim(), '│                            │', 'con lugar las secciones van separadas');
-  assert.match(texto[fin - 1], /q - Volver/);
-  assert.equal(texto.length, 36);
+  assert.match(texto[fin - 1], /Esc - Volver/);
+  assert.equal(texto.length, 44);
 });
 
 test('la tabla pinta los valores de cada fila con el color de su vela', () => {

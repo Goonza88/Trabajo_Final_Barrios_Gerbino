@@ -3,15 +3,18 @@
 import { grid } from '../../backend/terminal/widgets.mjs';
 import { anchoEje, anchoPlot, columnaVela, dibujarEscalon, indiceEnColumna, limitarVelas, putText } from './trazos.mjs';
 import { dibujarVelas } from './cuerpos.mjs';
+import { dibujarNiveles } from './niveles.mjs';
 
 // medidas, velas que entran, series recortadas y escala de precios, compartido por grafico y mira
-function prepararGrafico({ velas, width, height, showAxis, zoomY, offsetY, indicadores }) {
+function prepararGrafico({ velas, vacias = 0, width, height, showAxis, zoomY, offsetY, indicadores }) {
   const totalW = Math.max(1, Math.floor(width));
   const axisW = anchoEje(totalW, showAxis);
   const plotW = anchoPlot(totalW, showAxis);
   const totalH = Math.max(showAxis ? 2 : 1, Math.floor(height));
   const plotH = Math.max(1, totalH - (showAxis ? 1 : 0));
-  const visibles = limitarVelas(velas, plotW);
+  const visibles = limitarVelas(velas, Math.max(1, plotW - vacias));
+  // lugares de vela en el ancho - visibles y vacios a la derecha
+  const lugares = visibles.length + vacias;
   const recortar = serie => Array.isArray(serie) ? serie.slice(-visibles.length) : null;
   const smaVisible = recortar(indicadores.sma);
   const emaVisible = recortar(indicadores.ema);
@@ -23,8 +26,8 @@ function prepararGrafico({ velas, width, height, showAxis, zoomY, offsetY, indic
     }
     : null;
   const base = {
-    totalW, axisW, plotW, totalH, plotH, velas: visibles, smaVisible, emaVisible, bandas,
-    colForIndex: (i) => columnaVela(i, visibles.length, plotW),
+    totalW, axisW, plotW, totalH, plotH, velas: visibles, lugares, smaVisible, emaVisible, bandas,
+    colForIndex: (i) => columnaVela(i, lugares, plotW),
   };
   if (!visibles.length) return base;
 
@@ -61,12 +64,22 @@ function prepararGrafico({ velas, width, height, showAxis, zoomY, offsetY, indic
   return { ...base, lmin, lmax, lrange, py, precioEnFila };
 }
 
-// vela y precio bajo la mira - null sin velas o sin mira
-export function leerMira({ velas = [], width, height, showAxis = true, zoomY = 1, offsetY = 0, indicadores = {}, mira = null } = {}) {
-  const g = prepararGrafico({ velas, width, height, showAxis, zoomY, offsetY, indicadores });
+// vela, indice y precio bajo la mira - vela null en lugar vacio, null sin velas o sin mira
+export function leerMira({ velas = [], vacias = 0, width, height, showAxis = true, zoomY = 1, offsetY = 0, indicadores = {}, mira = null } = {}) {
+  const g = prepararGrafico({ velas, vacias, width, height, showAxis, zoomY, offsetY, indicadores });
   if (!mira || !g.velas.length) return null;
   const fila = Math.max(0, Math.min(g.plotH - 1, mira.row));
-  return { vela: g.velas[indiceEnColumna(mira.col - g.axisW, g.velas.length, g.plotW)], precio: g.precioEnFila(fila) };
+  const indice = indiceEnColumna(mira.col - g.axisW, g.lugares, g.plotW);
+  return { vela: g.velas[indice] ?? null, indice, lugares: g.lugares, precio: g.precioEnFila(fila) };
+}
+
+// mira sobre vela de un indice - en la fila dada o su cierre
+export function miraEnVela({ velas = [], vacias = 0, width, height, showAxis = true, zoomY = 1, offsetY = 0, indicadores = {} } = {}, indice, fila = null) {
+  const g = prepararGrafico({ velas, vacias, width, height, showAxis, zoomY, offsetY, indicadores });
+  if (!g.velas.length) return null;
+  const i = Math.max(0, Math.min(g.lugares - 1, indice));
+  const row = fila ?? Math.round(g.py(g.velas[Math.min(i, g.velas.length - 1)].close));
+  return { col: g.axisW + g.colForIndex(i), row: Math.max(0, Math.min(g.plotH - 1, row)) };
 }
 
 function dibujarEscalonCapa(plot, valores, colForIndex, filaParaValor, estilo) {
@@ -81,6 +94,7 @@ function dibujarEscalonCapa(plot, valores, colForIndex, filaParaValor, estilo) {
 
 export function graficoVelas({
   velas = [],
+  vacias = 0,
   width,
   height,
   interval = '1m',
@@ -89,13 +103,14 @@ export function graficoVelas({
   offsetY = 0,
   indicadores = {},
   mira = null,
+  niveles = [],
 } = {}) {
   if (!Number.isFinite(width) || !Number.isFinite(height)) {
     throw new TypeError('graficoVelas: faltan width y height');
   }
 
-  const g = prepararGrafico({ velas, width, height, showAxis, zoomY, offsetY, indicadores });
-  const { totalW, axisW, plotW, totalH, plotH, smaVisible, emaVisible, bandas, colForIndex } = g;
+  const g = prepararGrafico({ velas, vacias, width, height, showAxis, zoomY, offsetY, indicadores });
+  const { totalW, axisW, plotW, totalH, plotH, lugares, smaVisible, emaVisible, bandas, colForIndex } = g;
   velas = g.velas;
   const cells = Array.from({ length: totalH }, () => Array(totalW).fill(null));
 
@@ -198,6 +213,7 @@ export function graficoVelas({
   for (const serie of priceSeries) {
     dibujarEscalonCapa(plot, serie.values, colForIndex, py, () => serie.style);
   }
+  const etiquetasNivel = dibujarNiveles(plot, niveles, py);
 
   function fmt(v) {
     if (v >= 1000) return v.toFixed(0);
@@ -234,7 +250,7 @@ export function graficoVelas({
   }
 
   // con la mira la grilla se oculta
-  const colMira = mira ? colForIndex(indiceEnColumna(mira.col - axisW, velas.length, plotW)) : null;
+  const colMira = mira ? colForIndex(indiceEnColumna(mira.col - axisW, lugares, plotW)) : null;
   const filaMira = mira ? Math.max(0, Math.min(plotH - 1, mira.row)) : null;
   const celdaFondo = (r, c) => {
     if (mira) {
@@ -261,6 +277,10 @@ export function graficoVelas({
       const lab = ylabels.get(r) || '';
       putText(cells, r, 0, lab.slice(0, axisW), { fg: 'reader' });
     }
+  }
+  // el precio de cada nivel reemplaza la etiqueta en su fila
+  if (showAxis) {
+    for (const { row, texto, style } of etiquetasNivel) putText(cells, row, 0, texto.slice(0, axisW - 1).padEnd(axisW), style);
   }
 
   if (showAxis && labels.length) {

@@ -10,6 +10,7 @@ function tieneValores(valores) {
 // un indicador en su carril bajo el grafico, de 0 a tope o al maximo visible, con las columnas de graficoVelas
 export function graficoInferior({
   velas = [],
+  vacias = 0,
   width,
   height,
   showAxis = true,
@@ -28,7 +29,7 @@ export function graficoInferior({
   const plotW = anchoPlot(totalW, showAxis);
   const totalH = Math.max(1, Math.floor(height));
   const cells = Array.from({ length: totalH }, () => Array(totalW).fill(null));
-  const visibles = limitarVelas(velas, plotW);
+  const visibles = limitarVelas(velas, Math.max(1, plotW - vacias));
   if (!visibles.length) return grid({ width: totalW, height: totalH, cells });
 
   const serie = valores.slice(-visibles.length);
@@ -37,7 +38,7 @@ export function graficoInferior({
   const fila = valor => maximo > 0
     ? ((maximo - Math.max(0, Math.min(maximo, valor))) / maximo) * (totalH - 1)
     : totalH - 1;
-  const colForIndex = (i) => columnaVela(i, visibles.length, plotW);
+  const colForIndex = (i) => columnaVela(i, visibles.length + vacias, plotW);
 
   const carril = Array.from({ length: totalH }, () => Array(plotW).fill(null));
   if (totalH >= 3) {

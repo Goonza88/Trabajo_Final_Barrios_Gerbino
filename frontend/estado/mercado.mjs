@@ -9,6 +9,10 @@ const ZOOM_X = Object.freeze({ min: 20, max: 160, paso: 5 });
 // limites del zoom vertical, en veces el rango de precios
 const ZOOM_Y = Object.freeze({ min: 0.4, max: 3.0, paso: 0.1 });
 
+// orden sin confirmar - tipo y niveles marcados desde la mira
+const NIVELES_BORRADOR = ['entrada', 'take_profit', 'stop_loss'];
+const borradorVacio = () => ({ tipo: 'mercado', entrada: null, take_profit: null, stop_loss: null });
+
 export function crearEstado({
   symbol = 'BTCUSDT',
   simbolos = [symbol],
@@ -46,6 +50,8 @@ export function crearEstado({
     offsetY: 0,
     modoTabla: false,
     mira: null,
+    modoMira: false,
+    borrador: borradorVacio(),
     indicadores: { sma: false, ema: false, rsi: false, volume: false, bollinger: true }
   };
 
@@ -159,6 +165,7 @@ export function crearEstado({
     estado.symbol = symbol;
     estado.cursor = estado.simbolos.indexOf(symbol);
     if (cambio) {
+      estado.borrador = borradorVacio();
       estado.velas = [];
       estado.actualizado_en = null;
       estado.error = null;
@@ -205,6 +212,24 @@ export function crearEstado({
     estado.mira = mira;
   }
 
+  // modo teclado - la mira queda fija hasta apagarlo
+  function alternarModoMira() {
+    estado.modoMira = !estado.modoMira;
+    if (!estado.modoMira) estado.mira = null;
+  }
+
+  function fijarNivel(campo, precio) {
+    if (NIVELES_BORRADOR.includes(campo)) estado.borrador[campo] = precio;
+  }
+
+  function alternarTipoOrden() {
+    estado.borrador.tipo = estado.borrador.tipo === 'mercado' ? 'limite' : 'mercado';
+  }
+
+  function descartarBorrador() {
+    estado.borrador = borradorVacio();
+  }
+
   function alternarTabla() {
     estado.modoTabla = !estado.modoTabla;
   }
@@ -212,6 +237,8 @@ export function crearEstado({
   // al volver a entrar a la vista arranca en el grafico
   function reiniciarVista() {
     estado.modoTabla = false;
+    estado.modoMira = false;
+    estado.mira = null;
   }
 
   function mover(dir, cantidadVisible = estado.zoomX) {
@@ -220,10 +247,12 @@ export function crearEstado({
         ? Math.max(1, Math.floor(cantidadVisible))
         : Math.max(1, estado.zoomX);
       const maxOffset = Math.max(0, estado.velas.length - visible);
-      const actual = Math.max(0, Math.min(maxOffset, estado.offset));
+      // offset negativo deja lugares vacios a la derecha, siempre queda al menos una vela
+      const minOffset = -(visible - 1);
+      const actual = Math.max(minOffset, Math.min(maxOffset, estado.offset));
       estado.offset = dir === 'h'
         ? Math.min(maxOffset, actual + 1)
-        : Math.max(0, actual - 1);
+        : Math.max(minOffset, actual - 1);
     }
     if (dir === 'j') estado.offsetY = estado.offsetY + 0.0005;
     if (dir === 'k') estado.offsetY = estado.offsetY - 0.0005;
@@ -244,6 +273,10 @@ export function crearEstado({
     zoomV,
     alternarTabla,
     setMira,
+    alternarModoMira,
+    fijarNivel,
+    alternarTipoOrden,
+    descartarBorrador,
     reiniciarVista,
     mover,
     cancelar

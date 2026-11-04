@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { crearMonitor, seccionesAyuda } from '../frontend/vistas/monitor.mjs';
+import { crearEstado } from '../frontend/estado/mercado.mjs';
 import { flatten } from '../backend/terminal/view.mjs';
 import { sanitize } from '../backend/terminal/ansi.mjs';
 
@@ -22,12 +23,12 @@ test('cada linea de ayuda sale de un atajo y los intervalos del estado', () => {
   assert.ok(ayuda.includes('s - Intervalo 1h'));
   assert.ok(!ayuda.some(linea => linea.startsWith('d - ')), 'sin intervalo la tecla no aparece');
   assert.ok(secciones.some(seccion => seccion.resumen === 'a-s - Intervalos'), 'el resumen sigue las teclas en uso');
-  assert.equal(ayuda.at(-1), 'q - Volver');
+  assert.equal(ayuda.at(-1), 'Esc - Volver');
 });
 
-test('t alterna la tabla', () => {
+test('z alterna la tabla', () => {
   const { app, estado } = monitorDePrueba();
-  app.update(estado, tecla('t'));
+  app.update(estado, tecla('z'));
   assert.equal(estado.modoTabla, true);
 });
 
@@ -58,9 +59,9 @@ test('el zoom no responde con foco en la watchlist', () => {
   assert.equal(estado.zoomX, zoomX);
 });
 
-test('q cancela y sale', () => {
+test('Esc cancela y sale', () => {
   const { app, estado, salidas } = monitorDePrueba();
-  app.update(estado, tecla('q'));
+  app.update(estado, tecla('Esc'));
   assert.equal(salidas(), 1);
 });
 
@@ -90,4 +91,89 @@ test('con el click sostenido la mira cruza el grafico y la cabecera lee la vela 
   mouse('up', 70, 10);
   assert.equal(estado.mira, null);
   assert.match(pantalla()[1], /\| 24h:/, 'al soltar vuelve la cabecera normal');
+});
+
+function monitorConVelas() {
+  const prueba = monitorDePrueba();
+  prueba.estado.velas = Array.from({ length: 40 }, (_, i) => ({
+    open_time: i * 60000, open: String(100 + i), high: String(103 + i), low: String(98 + i), close: String(101 + i), volume: '1',
+  }));
+  return prueba;
+}
+
+test('x prende la mira sobre la ultima vela y en modo mira hjkl la mueven', () => {
+  const { app, estado } = monitorConVelas();
+  app.update(estado, tecla('x'));
+  assert.equal(estado.modoMira, true);
+  const inicial = { ...estado.mira };
+  assert.ok(inicial.col > 0);
+
+  app.update(estado, tecla('h'));
+  assert.ok(estado.mira.col < inicial.col, 'h salta a la vela anterior');
+  assert.equal(estado.offset, 0, 'y no desplaza el grafico');
+  app.update(estado, tecla('j'));
+  assert.equal(estado.mira.row, inicial.row + 1);
+  app.update(estado, tecla('l'));
+  assert.equal(estado.mira.col, inicial.col);
+
+  app.update(estado, { type: 'mouse', btn: 0, phase: 'up', col: 1, row: 1 });
+  assert.ok(estado.mira, 'en modo mira soltar el click no la borra');
+  app.update(estado, tecla('x'));
+  assert.equal(estado.modoMira, false);
+  assert.equal(estado.mira, null);
+});
+
+test('con la mira w, q y e marcan niveles del borrador y se dibujan en el grafico', () => {
+  const { app, estado } = monitorConVelas();
+  app.update(estado, tecla('w'));
+  assert.equal(estado.borrador.entrada, null, 'sin mira no marca');
+
+  app.update(estado, tecla('x'));
+  app.update(estado, tecla('w'));
+  app.update(estado, tecla('k'));
+  app.update(estado, tecla('k'));
+  app.update(estado, tecla('q'));
+  for (let i = 0; i < 5; i++) app.update(estado, tecla('j'));
+  app.update(estado, tecla('e'));
+  const { entrada, take_profit, stop_loss } = estado.borrador;
+  assert.match(entrada, /^\d+$/, 'redondea a los decimales de las velas');
+  assert.ok(Number(take_profit) > Number(entrada) && Number(stop_loss) < Number(entrada));
+
+  app.update(estado, tecla('x'));
+  const lineas = flatten(app.view(estado), 80, 24).map(linea => sanitize(linea.content));
+  assert.ok(lineas.filter(linea => linea.includes('┄')).length >= 3, 'una linea por nivel');
+  assert.ok(lineas.some(linea => linea.includes('│ ' + take_profit + ' ')), 'el precio del nivel va en el eje');
+
+  assert.equal(estado.borrador.tipo, 'mercado');
+  app.update(estado, tecla('r'));
+  assert.equal(estado.borrador.tipo, 'limite');
+  app.update(estado, tecla('c'));
+  assert.deepEqual(estado.borrador, { tipo: 'mercado', entrada: null, take_profit: null, stop_loss: null });
+});
+
+test('cambiar de simbolo descarta el borrador', async () => {
+  const { estado, seleccionar, fijarNivel } = crearEstado({ simbolos: ['BTCUSDT', 'ETHUSDT'], cargarVelas: async () => [] });
+  fijarNivel('take_profit', '110');
+  await seleccionar('ETHUSDT');
+  assert.equal(estado.borrador.take_profit, null);
+});
+
+test('l desplaza pasada la ultima vela y la mira sigue hacia los lugares vacios', () => {
+  const { app, estado } = monitorConVelas();
+  estado.zoomX = 20;
+  app.update(estado, tecla('l'));
+  assert.equal(estado.offset, -1, 'el grafico deja un lugar vacio a la derecha');
+  app.update(estado, tecla('h'));
+  assert.equal(estado.offset, 0);
+
+  app.update(estado, tecla('x'));
+  const ultima = estado.mira.col;
+  app.update(estado, tecla('l'));
+  assert.equal(estado.offset, -1, 'en el borde la mira desplaza el grafico');
+  assert.equal(estado.mira.col, ultima, 'y queda en su columna, sobre el lugar vacio');
+  const titulo = flatten(app.view(estado), 80, 24).map(linea => sanitize(linea.content))[1];
+  assert.match(titulo, /\| vela:- \| -/, 'sobre un lugar vacio la cabecera solo muestra el precio');
+
+  app.update(estado, tecla('h'));
+  assert.ok(estado.mira.col < ultima, 'h vuelve a las velas');
 });

@@ -278,6 +278,13 @@ test('pan usa la cantidad realmente visible y vuelve a fijar al moverse', () => 
   mover('l', 80);
   assert.equal(estado.offset, 19, 'al ampliar la vista, parte del offset previo no es valido');
 
+  estado.offset = 0;
+  mover('l', 4);
+  assert.equal(estado.offset, -1, 'pasada la ultima vela deja lugares vacios');
+  for (let i = 0; i < 5; i++) mover('l', 4);
+  assert.equal(estado.offset, -3, 'siempre queda una vela visible');
+  estado.offset = 0;
+
   zoomH('+', 40);
   assert.equal(estado.zoomX, 35, 'el zoom responde desde el maximo que cabe');
   zoomH('-', 40);

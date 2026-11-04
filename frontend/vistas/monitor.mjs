@@ -11,6 +11,7 @@ import { graficoVelas, leerMira } from '../graficos/velas.mjs';
 import { graficoInferior } from '../graficos/inferior.mjs';
 import { tablaVelas } from '../graficos/tabla.mjs';
 import { anchoWatchlist, fmtPrecio, fmtVariacion, vistaWatchlist } from '../features/watchlist.mjs';
+import { alternarMira, decimalesVisibles, marcarNivel, moverMiraMouse, moverMiraTeclado } from './mira.mjs';
 
 // ATAJOS ==========================================================================================
 
@@ -37,6 +38,19 @@ const enGrafico = accion => monitor => {
   if (monitor.estado.foco === 'grafico') accion(monitor);
 };
 
+// la accion solo corre con la mira sobre el grafico
+const conMira = accion => monitor => {
+  const { estado } = monitor;
+  if (estado.foco === 'grafico' && estado.mira && !estado.modoTabla) accion(monitor, opcionesActuales(estado));
+};
+
+// en modo mira las flechas mueven la mira
+const oMira = (dir, accion) => monitor => {
+  const { estado } = monitor;
+  if (estado.foco === 'grafico' && estado.modoMira && estado.mira) moverMiraTeclado(monitor, opcionesActuales(estado), dir);
+  else accion(monitor);
+};
+
 // rango de teclas para la ayuda resumida de una seccion, como 'h-l'
 const rango = teclas => teclas[0] + '-' + teclas.at(-1);
 
@@ -53,16 +67,16 @@ function atajos(intervalos = []) {
       { teclas: ['Tab'], ayuda: 'Tab - Cambiar Foco', accion: monitor => monitor.alternarFoco() },
     ] },
     { resumen: 'h-l - Desplazar', atajos: [
-      { teclas: ['h', 'ArrowLeft'], ayuda: 'h - Izquierda', accion: enGrafico(monitor => monitor.mover('h', cantidadVelasVisibles(monitor.estado))) },
-      { teclas: ['j', 'ArrowDown'], ayuda: 'j - Abajo', accion: monitor => {
+      { teclas: ['h', 'ArrowLeft'], ayuda: 'h - Izquierda', accion: oMira('h', enGrafico(monitor => monitor.mover('h', cantidadVelasVisibles(monitor.estado)))) },
+      { teclas: ['j', 'ArrowDown'], ayuda: 'j - Abajo', accion: oMira('j', monitor => {
         if (monitor.estado.foco === 'watchlist') monitor.moverCursor(1);
         else monitor.mover('j');
-      } },
-      { teclas: ['k', 'ArrowUp'], ayuda: 'k - Arriba', accion: monitor => {
+      }) },
+      { teclas: ['k', 'ArrowUp'], ayuda: 'k - Arriba', accion: oMira('k', monitor => {
         if (monitor.estado.foco === 'watchlist') monitor.moverCursor(-1);
         else monitor.mover('k');
-      } },
-      { teclas: ['l', 'ArrowRight'], ayuda: 'l - Derecha', accion: enGrafico(monitor => monitor.mover('l', cantidadVelasVisibles(monitor.estado))) },
+      }) },
+      { teclas: ['l', 'ArrowRight'], ayuda: 'l - Derecha', accion: oMira('l', enGrafico(monitor => monitor.mover('l', cantidadVelasVisibles(monitor.estado)))) },
     ] },
     { resumen: 'y-o - Zoom', atajos: [
       { teclas: ['y'], ayuda: 'y - Alejar Horizontal', accion: enGrafico(monitor => monitor.zoomH('-', capacidadZoom(monitor.estado))) },
@@ -70,21 +84,31 @@ function atajos(intervalos = []) {
       { teclas: ['i'], ayuda: 'i - Acercar Vertical', accion: enGrafico(monitor => monitor.zoomV('+')) },
       { teclas: ['o'], ayuda: 'o - Acercar Horizontal', accion: enGrafico(monitor => monitor.zoomH('+', capacidadZoom(monitor.estado))) },
     ] },
-    { atajos: [
-      { teclas: ['t'], ayuda: 't - Vista de Tabla', accion: monitor => monitor.alternarTabla() },
+    { resumen: 'q-r - Operacion', atajos: [
+      { teclas: ['q'], ayuda: 'q - Take Profit', accion: conMira((monitor, opciones) => marcarNivel(monitor, opciones, 'take_profit')) },
+      { teclas: ['w'], ayuda: 'w - Entrada', accion: conMira((monitor, opciones) => marcarNivel(monitor, opciones, 'entrada')) },
+      { teclas: ['e'], ayuda: 'e - Stop Loss', accion: conMira((monitor, opciones) => marcarNivel(monitor, opciones, 'stop_loss')) },
+      { teclas: ['r'], ayuda: 'r - Mercado o Limite', accion: enGrafico(monitor => monitor.alternarTipoOrden()) },
     ] },
     { resumen: rango(teclasIntervalo) + ' - Intervalos', atajos: teclasIntervalo.map((tecla, i) => ({
       teclas: [tecla],
       ayuda: tecla + ' - Intervalo ' + intervalos[i],
       accion: monitor => alTerminarCarga(monitor.setIntervalo(intervalos[i])),
     })) },
+    { atajos: [
+      { teclas: ['z'], ayuda: 'z - Vista de Tabla', accion: monitor => monitor.alternarTabla() },
+      { teclas: ['x'], ayuda: 'x - Iniciar Mira', accion: enGrafico(monitor => {
+        if (!monitor.estado.modoTabla) alternarMira(monitor, opcionesActuales(monitor.estado));
+      }) },
+      { teclas: ['c'], ayuda: 'c - Descartar Accion', accion: enGrafico(monitor => monitor.descartarBorrador()) },
+    ] },
     { resumen: rango(INDICADORES.map(({ tecla }) => tecla)) + ' - Indicadores', atajos: INDICADORES.map(({ tecla, nombre, titulo }) => ({
       teclas: [tecla],
       ayuda: tecla + ' - ' + titulo,
       accion: monitor => monitor.alternarIndicador(nombre),
     })) },
     { atajos: [
-      { teclas: ['q'], ayuda: 'q - Volver', accion: monitor => {
+      { teclas: ['Esc'], ayuda: 'Esc - Volver', accion: monitor => {
         monitor.cancelar();
         monitor.salir();
       } },
@@ -132,14 +156,16 @@ export function cantidadVelasVisibles(estado, cols = size().cols) {
   return Math.min(estado.zoomX, capacidadZoom(estado, cols));
 }
 
+// ventana de velas visibles - offset negativo son lugares vacios a la derecha de la ultima
 export function rangoVentanaVelas(total, cantidad, offset = 0) {
   const count = Math.max(1, Math.floor(cantidad));
   const maxOffset = Math.max(0, total - count);
   const safeOffset = Number.isFinite(offset)
-    ? Math.max(0, Math.min(maxOffset, Math.floor(offset)))
+    ? Math.max(-(count - 1), Math.min(maxOffset, Math.floor(offset)))
     : 0;
-  const fin = total - safeOffset;
-  return { inicio: Math.max(0, fin - count), fin };
+  const vacias = Math.max(0, -safeOffset);
+  const fin = total - Math.max(0, safeOffset);
+  return { inicio: Math.max(0, fin - (count - vacias)), fin, vacias };
 }
 
 // PANELES =========================================================================================
@@ -208,20 +234,33 @@ function recuadroInferior(vis, inferior, width, height) {
 // medidas del panel de velas en pantalla
 function medidasPanel(estado, cols, height) {
   const { watchW, chartW } = dimensiones(estado, cols);
-  const { inicio, fin } = rangoVentanaVelas(estado.velas.length, cantidadVelasVisibles(estado, cols), estado.offset);
+  const { inicio, fin, vacias } = rangoVentanaVelas(estado.velas.length, cantidadVelasVisibles(estado, cols), estado.offset);
   const activos = estado.modoTabla ? [] : inferioresVisibles(estado, inicio, fin);
   const { alto, entran } = medidasInferiores(activos.length, height);
   const marco = { border: 'round', pad: [0, 1], height: height - alto * entran };
   const { innerW, innerH } = boxSize(marco, chartW);
   // grilla comienza tras el separador, borde y padding, bajo el borde y cabecera
   const origen = { x: watchW + 3, y: 3 };
-  return { chartW, inicio, fin, inferiores: activos.slice(0, entran), alto, marco, innerW, gridH: Math.max(2, innerH - 3), origen };
+  return { chartW, inicio, fin, vacias, inferiores: activos.slice(0, entran), alto, marco, innerW, gridH: Math.max(2, innerH - 3), origen };
+}
+
+// lineas del borrador - a market la entrada sigue al ultimo precio
+function nivelesBorrador(estado) {
+  const { tipo, entrada, take_profit, stop_loss } = estado.borrador;
+  if (entrada == null && take_profit == null && stop_loss == null) return [];
+  const precioEntrada = tipo === 'mercado' ? estado.velas.at(-1)?.close : entrada;
+  return [
+    { precio: precioEntrada == null ? null : fmtPrecio(precioEntrada), style: { fg: 'text' } },
+    { precio: take_profit, style: { fg: 'success' } },
+    { precio: stop_loss, style: { fg: 'danger' } },
+  ];
 }
 
 // opciones del grafico de precios para la ventana, mismas para dibujarlo y leer la mira
 function opcionesGrafico(estado, medidas) {
   return {
     velas: estado.velas.slice(medidas.inicio, medidas.fin),
+    vacias: medidas.vacias,
     width: medidas.innerW,
     height: medidas.gridH,
     showAxis: true,
@@ -230,7 +269,14 @@ function opcionesGrafico(estado, medidas) {
     offsetY: estado.offsetY,
     indicadores: indicadoresVisibles(estado, medidas.inicio, medidas.fin),
     mira: estado.modoTabla ? null : estado.mira,
+    niveles: nivelesBorrador(estado),
   };
+}
+
+// opciones del grafico con las medidas de la terminal actual
+function opcionesActuales(estado) {
+  const { cols, rows: height } = size();
+  return opcionesGrafico(estado, medidasPanel(estado, cols, height));
 }
 
 // titulo del grafico - con mira muestra precio, variacion y hora de la vela
@@ -239,12 +285,11 @@ function tituloGrafico(estado, opciones) {
   const inicio = estado.symbol + ' ' + estado.interval + ' | ';
   if (lectura) {
     const { vela, precio } = lectura;
-    // mismos decimales que los precios visibles, sin contar ceros al final
-    const decimales = Math.max(0, ...opciones.velas.flatMap(v => [v.open, v.high, v.low, v.close])
-      .map(p => (String(p).split('.')[1] ?? '').replace(/0+$/, '').length));
+    const texto = inicio + fmtPrecio(precio.toFixed(decimalesVisibles(opciones.velas)));
+    if (!vela) return texto + ' | vela:- | -';
     const variacion = (Number(vela.close) - Number(vela.open)) / Number(vela.open) * 100;
     const hora = new Date(vela.open_time).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    return inicio + fmtPrecio(precio.toFixed(decimales)) + ' | vela:' + fmtVariacion(variacion) + ' | ' + hora;
+    return texto + ' | vela:' + fmtVariacion(variacion) + ' | ' + hora;
   }
   const precio = estado.velas.at(-1)?.close ?? estado.tickers[estado.symbol]?.price;
   return inicio + fmtPrecio(precio) + ' | 24h:' + fmtVariacion(estado.variaciones[estado.symbol])
@@ -268,7 +313,7 @@ function panelVelas(estado, medidas) {
     error ? text('err: ' + error, { fg: 'danger' }) : null
   ].filter(Boolean)), marco);
   if (!inferiores.length) return grafico;
-  return rows([grafico, ...inferiores.map(inferior => recuadroInferior(vis, inferior, chartW, alto))]);
+  return rows([grafico, ...inferiores.map(inferior => recuadroInferior(vis, { ...inferior, vacias: opciones.vacias }, chartW, alto))]);
 }
 
 export function vistaMonitor(estado) {
@@ -286,25 +331,6 @@ export function vistaMonitor(estado) {
 }
 
 // APP =============================================================================================
-
-// con click izquierdo sostenido sobre el grafico la mira sigue al mouse
-function moverMira(monitor, event) {
-  const { estado } = monitor;
-  if (event.phase === 'up') return monitor.setMira(null);
-  if (event.btn !== 0 || estado.modoTabla || (event.phase !== 'down' && event.phase !== 'drag')) return;
-  const { cols, rows: height } = size();
-  const { innerW, gridH, origen } = medidasPanel(estado, cols, height);
-  const ejeW = innerW - anchoPlot(innerW, true);
-  const col = event.col - 1 - origen.x;
-  const row = event.row - 1 - origen.y;
-  const dentro = col >= ejeW && col < innerW && row >= 0 && row < gridH - 1;
-  if (event.phase === 'down' && !dentro) return;
-  if (event.phase === 'drag' && !estado.mira) return;
-  monitor.setMira({
-    col: Math.max(ejeW, Math.min(innerW - 1, col)),
-    row: Math.max(0, Math.min(gridH - 2, row)),
-  });
-}
 
 // arma el monitor como app del runtime
 export function crearMonitor({ salir, sondeoMs = 5000, ...opciones }) {
@@ -325,7 +351,8 @@ export function crearMonitor({ salir, sondeoMs = 5000, ...opciones }) {
         return estado;
       }
       if (event.type === 'mouse') {
-        moverMira(monitor, event);
+        const { cols, rows: height } = size();
+        moverMiraMouse(monitor, event, medidasPanel(estado, cols, height));
         return estado;
       }
       if (event.type === 'sub:tick' && event.tag === 'poll') {
