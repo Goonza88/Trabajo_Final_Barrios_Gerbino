@@ -1,10 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createData } from '../backend/datos/sqlite/index.mjs';
+import { up as applyInitialMigration } from '../backend/datos/migraciones/001-inicial.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const schema = readFileSync(path.join(root, 'database', 'schema.sql'), 'utf8');
@@ -200,7 +202,61 @@ test('notas y busqueda', () => {
     assert.deepEqual(nota.tags, ['analisis']);
     assert.equal(datos.notes.listNotes({ busqueda: 'VOLUMEN' }).length, 1);
     assert.equal(datos.notes.listNotes({ busqueda: 'ethereum' }).length, 0);
+
+    datos.notes.createNote({ titulo: 'Año de ESPAÑA', cuerpo: 'Señal de COMPRA' });
+    assert.equal(datos.notes.listNotes({ busqueda: 'AÑO' }).length, 1);
+    assert.equal(datos.notes.listNotes({ busqueda: 'españa' }).length, 1);
+    assert.equal(datos.notes.listNotes({ busqueda: 'SEÑAL' }).length, 1);
   });
+});
+
+test('migraciones: esquema actualizado coincide con una base nueva', () => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'datos-sqlite-'));
+  const filename = path.join(directory, 'actualizada.db');
+  const freshFilename = path.join(directory, 'nueva.db');
+  const legacy = new DatabaseSync(filename);
+
+  try {
+    applyInitialMigration(legacy);
+    legacy.exec('CREATE TABLE schema_migration (id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)');
+    legacy.prepare('INSERT INTO schema_migration(id, applied_at) VALUES (?, ?)').run('001-inicial', 1);
+  } finally {
+    legacy.close();
+  }
+
+  const updated = createData({ path: filename, ahora: () => 1000 });
+  const fresh = createData({ path: freshFilename, ahora: () => 1000 });
+  const updatedDb = new DatabaseSync(filename);
+  const freshDb = new DatabaseSync(freshFilename);
+
+  function schemaOf(db) {
+    return db.prepare(`
+      SELECT type, name, tbl_name, sql
+      FROM sqlite_master
+      WHERE type IN ('table', 'index')
+        AND name NOT LIKE 'sqlite_%'
+        AND name <> 'schema_migration'
+      ORDER BY type, name
+    `).all().map(record => ({
+      ...record,
+      sql: record.sql?.replace(/--[^\n]*/g, '').replace(/["`]/g, '').replace(/\s+/g, ' ').trim()
+    }));
+  }
+
+  try {
+    assert.deepEqual(schemaOf(updatedDb), schemaOf(freshDb));
+    assert.deepEqual(
+      updatedDb.prepare('SELECT id FROM schema_migration ORDER BY id').all(),
+      freshDb.prepare('SELECT id FROM schema_migration ORDER BY id').all()
+    );
+    assert.deepEqual(updatedDb.prepare('PRAGMA foreign_key_check').all(), []);
+  } finally {
+    updatedDb.close();
+    freshDb.close();
+    updated.close();
+    fresh.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("el esquema rechaza decimales con punto final", () => {
