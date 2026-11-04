@@ -32,6 +32,11 @@ export function anchoPlot(width, showAxis = true) {
   return Math.max(1, totalW - anchoEje(totalW, showAxis));
 }
 
+// verde si la vela cerro arriba o igual a su apertura, roja si cerro abajo
+function estiloVela(vela) {
+  return { fg: Number(vela.close) >= Number(vela.open) ? 'success' : 'danger' };
+}
+
 // volumen con la parte entera en al menos dos digitos
 function fmtVolumen(valor) {
   const [entera, ...decimales] = String(valor).split('.');
@@ -41,7 +46,7 @@ function fmtVolumen(valor) {
 // mismas velas en una tabla, la mas reciente arriba - valores del color de la vela
 export function tablaVelas(velas) {
   const filas = velas.slice().reverse().map(v => {
-    const style = { fg: Number(v.close) >= Number(v.open) ? 'success' : 'danger' };
+    const style = estiloVela(v);
     return [
       new Date(v.open_time).toLocaleTimeString('es-AR'),
       ...[v.open, v.high, v.low, v.close, fmtVolumen(v.volume)].map(text => ({ text, style })),
@@ -77,7 +82,8 @@ function celdaLinea(plot, row, col, ch, style) {
   }
 }
 
-function dibujarEscalon(plot, valores, colForIndex, filaParaValor, style) {
+// linea escalonada - estilo(i) pinta el tramo del punto i hasta el siguiente
+function dibujarEscalon(plot, valores, colForIndex, filaParaValor, estilo) {
   let anterior = null;
   for (let i = 0; i < valores.length; i++) {
     if (valores[i] == null) {
@@ -97,14 +103,15 @@ function dibujarEscalon(plot, valores, colForIndex, filaParaValor, style) {
       continue;
     }
     const row = Math.max(0, Math.min(plot.length - 1, Math.round(position)));
+    const style = estilo(i);
     if (!anterior) {
       celdaLinea(plot, row, col, '─', style);
-      anterior = { row, col };
+      anterior = { row, col, style };
       continue;
     }
 
     // arranca despues del punto anterior para no pisar su esquina
-    for (let x = anterior.col + 1; x < col; x++) celdaLinea(plot, anterior.row, x, '─', style);
+    for (let x = anterior.col + 1; x < col; x++) celdaLinea(plot, anterior.row, x, '─', anterior.style);
     if (row === anterior.row) {
       celdaLinea(plot, row, col, '─', style);
     } else {
@@ -115,13 +122,19 @@ function dibujarEscalon(plot, valores, colForIndex, filaParaValor, style) {
       celdaLinea(plot, anterior.row, col, baja ? '╮' : '╯', style);
       celdaLinea(plot, row, col, baja ? '╰' : '╭', style);
     }
-    anterior = { row, col };
+    anterior = { row, col, style };
   }
 }
 
-function dibujarEscalonCapa(plot, valores, colForIndex, filaParaValor, style) {
+// columna de la vela i - las velas se reparten en todo el ancho del grafico
+function columnaVela(i, cantidad, plotW) {
+  if (cantidad <= 1) return Math.floor(plotW / 2);
+  return Math.round((i / Math.max(1, cantidad - 1)) * (plotW - 1));
+}
+
+function dibujarEscalonCapa(plot, valores, colForIndex, filaParaValor, estilo) {
   const capa = Array.from({ length: plot.length }, () => Array(plot[0]?.length ?? 0).fill(null));
-  dibujarEscalon(capa, valores, colForIndex, filaParaValor, style);
+  dibujarEscalon(capa, valores, colForIndex, filaParaValor, estilo);
   for (let row = 0; row < capa.length; row++) {
     for (let col = 0; col < capa[row].length; col++) {
       if (capa[row][col]) plot[row][col] = capa[row][col];
@@ -148,19 +161,12 @@ export function graficoVelas({
   const plotW = anchoPlot(totalW, showAxis);
   const totalH = Math.max(showAxis ? 2 : 1, Math.floor(height));
   const timeAxisH = showAxis ? 1 : 0;
-  const tienePaneInferior = Array.isArray(indicadores.rsi) || Array.isArray(indicadores.volume);
-  const maxPaneH = Math.max(0, totalH - timeAxisH - 1);
-  const paneDeseado = Math.min(9, Math.max(4, Math.floor(totalH * 0.4)));
-  const paneH = tienePaneInferior && maxPaneH >= 2 ? Math.min(maxPaneH, paneDeseado) : 0;
-  const panePlotH = paneH > 0 ? paneH - 1 : 0;
-  const plotH = Math.max(1, totalH - timeAxisH - paneH);
+  const plotH = Math.max(1, totalH - timeAxisH);
   const cells = Array.from({ length: totalH }, () => Array(totalW).fill(null));
   const seriesVisibles = serie => Array.isArray(serie) ? serie.slice(-velas.length) : null;
   velas = limitarVelas(velas, plotW);
   const smaVisible = seriesVisibles(indicadores.sma);
   const emaVisible = seriesVisibles(indicadores.ema);
-  const rsiVisible = seriesVisibles(indicadores.rsi);
-  const volumeVisible = seriesVisibles(indicadores.volume);
   const bandas = indicadores.bollinger && typeof indicadores.bollinger === 'object'
     ? {
       middle: seriesVisibles(indicadores.bollinger.middle),
@@ -212,10 +218,7 @@ export function graficoVelas({
   if (lmax - lmin < 1e-12) { lmin -= 0.001; lmax += 0.001; }
   const lrange = lmax - lmin;
   const py = (v) => ((lmax - toLog(v)) / lrange) * (plotH - 1);
-  const colForIndex = (i) => {
-    if (velas.length <= 1) return Math.floor(plotW / 2);
-    return Math.round((i / Math.max(1, velas.length - 1)) * (plotW - 1));
-  };
+  const colForIndex = (i) => columnaVela(i, velas.length, plotW);
 
   const labels = [];
 
@@ -383,7 +386,7 @@ export function graficoVelas({
   const cuerpos = velas.map((c, i) => {
     const o = Number(c.open), cl = Number(c.close);
     const col = colForIndex(i);
-    const style = { fg: cl >= o ? 'success' : 'danger' };
+    const style = estiloVela(c);
     if (col < 0 || col >= plotW) {
       return { col, style, estados: [{ inicio: NaN, fin: NaN, open: NaN, close: NaN, local: 0 }] };
     }
@@ -415,7 +418,7 @@ export function graficoVelas({
   }
 
   for (const serie of priceSeries) {
-    dibujarEscalonCapa(plot, serie.values, colForIndex, py, serie.style);
+    dibujarEscalonCapa(plot, serie.values, colForIndex, py, () => serie.style);
   }
 
   function fmt(v) {
@@ -472,64 +475,6 @@ export function graficoVelas({
     }
   }
 
-  if (paneH > 0) {
-    const titleRow = plotH;
-    const panePlotStart = titleRow + 1;
-    const paneLabels = [];
-    if (Array.isArray(rsiVisible)) paneLabels.push('RSI 0-100');
-    if (Array.isArray(volumeVisible)) paneLabels.push('VOL % max');
-    putText(cells, titleRow, 0, paneLabels.join(' | '), { fg: 'muted' });
-
-    const volumenes = (volumeVisible ?? []).filter(value => value != null && Number.isFinite(Number(value))).map(Number);
-    const maxVolume = Math.max(0, ...volumenes);
-    const hasRsi = Array.isArray(rsiVisible);
-    const hasVolume = Array.isArray(volumeVisible);
-    const separaEscalas = hasRsi && hasVolume;
-    const rsiHeight = hasRsi ? (separaEscalas ? Math.ceil(panePlotH / 2) : panePlotH) : 0;
-    const volumeHeight = hasVolume ? (separaEscalas ? panePlotH - rsiHeight : panePlotH) : 0;
-
-    const pintarCarril = (valores, start, alto, filaParaValor, style, umbrales = []) => {
-      if (alto < 1) return;
-      const carril = Array.from({ length: alto }, () => Array(plotW).fill(null));
-      for (const nivel of umbrales) {
-        const row = Math.round(filaParaValor(nivel));
-        for (let col = 0; col < plotW; col++) celdaLinea(carril, row, col, '·', { fg: 'reader' });
-      }
-      if (tieneValores(valores)) dibujarEscalon(carril, valores, colForIndex, filaParaValor, style);
-
-      for (let r = 0; r < alto; r++) {
-        const row = panePlotStart + start + r;
-        for (let col = 0; col < plotW; col++) {
-          if (carril[r][col]) cells[row][axisW + col] = carril[r][col];
-        }
-        if (showAxis) {
-          if (r === 0) putText(cells, row, 0, '100', { fg: 'reader' });
-          else if (r === alto - 1) putText(cells, row, 0, '0', { fg: 'reader' });
-        }
-      }
-    };
-
-    if (hasRsi) {
-      pintarCarril(
-        rsiVisible,
-        0,
-        rsiHeight,
-        value => ((100 - Math.max(0, Math.min(100, value))) / 100) * (rsiHeight - 1),
-        { fg: 'accent' },
-        rsiHeight >= 3 ? [30, 70] : []
-      );
-    }
-    if (hasVolume) {
-      pintarCarril(
-        volumeVisible,
-        hasRsi ? rsiHeight : 0,
-        volumeHeight,
-        value => maxVolume > 0 ? ((maxVolume - value) / maxVolume) * (volumeHeight - 1) : volumeHeight - 1,
-        { fg: 'success' }
-      );
-    }
-  }
-
   if (showAxis && labels.length) {
     const row = totalH - 1;
     let cursor = axisW;
@@ -541,6 +486,61 @@ export function graficoVelas({
       putText(cells, row, start, lab.t, { fg: 'sec' });
       cursor = start + labelW;
     }
+  }
+
+  return grid({ width: totalW, height: totalH, cells });
+}
+
+// un indicador en su carril bajo el grafico, de 0 a tope o al maximo visible, con las columnas de graficoVelas
+export function graficoInferior({
+  velas = [],
+  width,
+  height,
+  showAxis = true,
+  valores = [],
+  tope = null,
+  umbrales = [],
+  style = { fg: 'accent' },
+  colorDeVela = false,
+} = {}) {
+  if (!Number.isFinite(width) || !Number.isFinite(height)) {
+    throw new TypeError('graficoInferior: faltan width y height');
+  }
+
+  const totalW = Math.max(1, Math.floor(width));
+  const axisW = anchoEje(totalW, showAxis);
+  const plotW = anchoPlot(totalW, showAxis);
+  const totalH = Math.max(1, Math.floor(height));
+  const cells = Array.from({ length: totalH }, () => Array(totalW).fill(null));
+  const visibles = limitarVelas(velas, plotW);
+  if (!visibles.length) return grid({ width: totalW, height: totalH, cells });
+
+  const serie = valores.slice(-visibles.length);
+  const numeros = serie.filter(valor => valor != null && Number.isFinite(Number(valor))).map(Number);
+  const maximo = tope ?? Math.max(0, ...numeros);
+  const fila = valor => maximo > 0
+    ? ((maximo - Math.max(0, Math.min(maximo, valor))) / maximo) * (totalH - 1)
+    : totalH - 1;
+  const colForIndex = (i) => columnaVela(i, visibles.length, plotW);
+
+  const carril = Array.from({ length: totalH }, () => Array(plotW).fill(null));
+  if (totalH >= 3) {
+    for (const nivel of umbrales) {
+      const row = Math.round(fila(nivel));
+      for (let col = 0; col < plotW; col++) celdaLinea(carril, row, col, '·', { fg: 'reader' });
+    }
+  }
+  const estilo = colorDeVela ? i => estiloVela(visibles[i]) : () => style;
+  if (tieneValores(serie)) dibujarEscalon(carril, serie, colForIndex, fila, estilo);
+
+  for (let row = 0; row < totalH; row++) {
+    for (let col = 0; col < plotW; col++) {
+      if (carril[row][col]) cells[row][axisW + col] = carril[row][col];
+    }
+  }
+  if (showAxis) {
+    putText(cells, 0, 0, '100', { fg: 'reader' });
+    if (totalH > 1) putText(cells, totalH - 1, 0, '0', { fg: 'reader' });
   }
 
   return grid({ width: totalW, height: totalH, cells });

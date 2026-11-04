@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { flatten } from '../backend/terminal/view.mjs';
 import { sanitize, toAnsi } from '../backend/terminal/ansi.mjs';
-import { anchoPlot, graficoVelas, limitarVelas, tablaVelas } from '../frontend/graficos/velas.mjs';
+import { anchoPlot, graficoInferior, graficoVelas, limitarVelas, tablaVelas } from '../frontend/graficos/velas.mjs';
 import { capacidadVelas, cantidadVelasVisibles, rangoVentanaVelas, seccionesAyuda, vistaMonitor } from '../frontend/vistas/monitor.mjs';
 import { crearEstado } from '../frontend/estado/mercado.mjs';
 import { anchoWatchlist, vistaWatchlist } from '../frontend/features/watchlist.mjs';
@@ -224,18 +224,11 @@ test('un cuerpo corto entre dos cuerpos largos empalma al menos un lado', () => 
 });
 
 test('las lineas de indicadores no dejan huecos en sus esquinas', () => {
-  const node = graficoVelas({
-    velas: velas(4),
-    width: 4,
-    height: 12,
-    showAxis: false,
-    indicadores: { rsi: [0, 100, 0, 100] },
-  });
+  const node = graficoInferior({ velas: velas(4), width: 4, height: 3, showAxis: false, valores: [0, 100, 0, 100], tope: 100 });
   // hacia donde sale cada trazo, y el trazo vecino tiene que entrar desde el lado opuesto
   const salidas = { '─': 'izq der', '│': 'arr aba', '╮': 'izq aba', '╯': 'izq arr', '╰': 'arr der', '╭': 'aba der' };
   const pasos = { izq: [0, -1, 'der'], der: [0, 1, 'izq'], arr: [-1, 0, 'aba'], aba: [1, 0, 'arr'] };
-  const titulo = node.cells.findIndex(fila => fila[0]?.ch === 'R');
-  const carril = node.cells.slice(titulo + 1);
+  const carril = node.cells;
   const trazos = carril.flatMap((fila, row) => fila.flatMap((celda, col) => salidas[celda?.ch] ? [{ row, col, ch: celda.ch }] : []));
 
   assert.ok(trazos.some(trazo => trazo.ch === '╭') && trazos.some(trazo => trazo.ch === '╯'));
@@ -247,6 +240,32 @@ test('las lineas de indicadores no dejan huecos en sus esquinas', () => {
       assert.ok(vecino && salidas[vecino.ch]?.includes(opuesto), ch + ' en ' + row + ',' + col + ' no conecta hacia ' + lado);
     }
   }
+});
+
+test('un indicador inferior usa las mismas columnas que las velas', () => {
+  const fuente = velas(6);
+  const precio = graficoVelas({ velas: fuente, width: 20, height: 10 });
+  const inferior = graficoInferior({ velas: fuente, width: 20, height: 4, valores: [50, 60, 40, 70, 30, 50], tope: 100, style: { fg: 'accent' } });
+  const velasEnPrecio = [...new Set(precio.cells.flatMap(fila => fila.flatMap((celda, col) =>
+    ['success', 'danger'].includes(celda?.style?.fg) ? [col] : [])))].sort((a, b) => a - b);
+
+  assert.equal(inferior.height, 4);
+  assert.deepEqual(velasEnPrecio, [9, 11, 13, 15, 17, 19]);
+  assert.ok(velasEnPrecio.every(col => inferior.cells.some(fila => fila[col]?.style?.fg === 'accent')), 'cada vela tiene su punto abajo');
+});
+
+test('sin tope el indicador inferior se mide contra el maximo visible', () => {
+  const inferior = graficoInferior({ velas: velas(3), width: 12, height: 3, valores: [5, 10, 0], style: { fg: 'success' } });
+  const filaDe = col => inferior.cells.findIndex(fila => fila[col]?.style?.fg === 'success');
+  assert.deepEqual([9, 10, 11].map(filaDe), [1, 0, 0], 'el maximo toca el techo');
+  assert.equal(inferior.cells[2][11]?.style?.fg, 'success', 'el cero toca el piso');
+});
+
+test('con color de vela cada tramo del indicador inferior va del color de su vela', () => {
+  // en velas() las pares cierran arriba (verdes) y las impares abajo (rojas)
+  const inferior = graficoInferior({ velas: velas(4), width: 4, height: 3, showAxis: false, valores: [1, 2, 1, 2], colorDeVela: true });
+  const colores = [0, 1, 2, 3].map(col => [...new Set(inferior.cells.flatMap(fila => fila[col] ? [fila[col].style.fg] : []))]);
+  assert.deepEqual(colores, [['success'], ['danger'], ['success'], ['danger']]);
 });
 
 test('graficoVelas sin velas ocupa el grid y avisa', () => {
@@ -299,6 +318,28 @@ test('el monitor muestra velas consecutivas hasta el maximo que entra', () => {
   assert.equal(visibles.length, capacidad);
   assert.equal(visibles.at(-1), fuente.at(-1));
   assert.ok(visibles.every((vela, i) => i === 0 || vela.open_time - visibles[i - 1].open_time === 60000));
+});
+
+test('el monitor pone rsi y volumen cada uno en su recuadro bajo el grafico', async () => {
+  const { estado, cargar } = crearEstado({ cargarVelas: async () => velas(30) });
+  await cargar();
+  const texto = () => flatten(vistaMonitor(estado), 80, 24).map(linea => sanitize(linea.content)).join('\n');
+
+  assert.doesNotMatch(texto(), /RSI 0-100/);
+  estado.indicadores.rsi = true;
+  estado.indicadores.volume = true;
+  const lineas = texto().split('\n');
+  const rsi = lineas.findIndex(linea => linea.includes('RSI 0-100'));
+  const vol = lineas.findIndex(linea => linea.includes('VOL % max'));
+  assert.ok(rsi > 0 && vol > rsi);
+  for (const titulo of [rsi, vol]) {
+    assert.match(lineas[titulo - 1], /╭─/, 'cada recuadro abre su propio borde');
+    assert.match(lineas[titulo - 2], /╰─/, 'el de arriba cierra el suyo antes');
+  }
+  assert.equal(lineas.length, 24);
+
+  estado.modoTabla = true;
+  assert.doesNotMatch(texto(), /RSI 0-100/, 'la tabla no lleva recuadro');
 });
 
 test('vistaMonitor compone watchlist y grafico sin romper', async () => {

@@ -6,7 +6,7 @@ import { size, invalidate, Sub } from '../../backend/terminal/runtime.mjs';
 import { sanitize } from '../../backend/terminal/ansi.mjs';
 import { boxSize } from '../../backend/terminal/layout.mjs';
 import { crearEstado } from '../estado/mercado.mjs';
-import { anchoPlot, graficoVelas, tablaVelas } from '../graficos/velas.mjs';
+import { anchoPlot, graficoInferior, graficoVelas, tablaVelas } from '../graficos/velas.mjs';
 import { anchoWatchlist, fmtPrecio, fmtVariacion, vistaWatchlist } from '../features/watchlist.mjs';
 
 // ATAJOS ==========================================================================================
@@ -17,8 +17,10 @@ const TECLAS_INTERVALO = ['a', 's', 'd', 'f', 'g'];
 const INDICADORES = [
   { tecla: '1', nombre: 'sma', titulo: 'Media Simple', etiqueta: serie => 'SMA' + serie.periodo },
   { tecla: '2', nombre: 'ema', titulo: 'Media Exponencial', etiqueta: serie => 'EMA' + serie.periodo },
-  { tecla: '3', nombre: 'rsi', titulo: 'RSI', etiqueta: serie => 'RSI' + serie.periodo },
-  { tecla: '4', nombre: 'volume', titulo: 'Volumen', etiqueta: () => 'VOL' },
+  { tecla: '3', nombre: 'rsi', titulo: 'RSI', etiqueta: serie => 'RSI' + serie.periodo,
+    inferior: { titulo: 'RSI 0-100', tope: 100, umbrales: [30, 70], style: { fg: 'success' } } },
+  { tecla: '4', nombre: 'volume', titulo: 'Volumen', etiqueta: () => 'VOL',
+    inferior: { titulo: 'VOL % max', colorDeVela: true } },
   { tecla: '5', nombre: 'bollinger', titulo: 'Bandas de Bollinger', etiqueta: serie => 'BB' + serie.periodo + 'x' + serie.desviaciones },
 ];
 
@@ -153,8 +155,6 @@ function indicadoresVisibles(estado, inicio, fin) {
   return {
     sma: activos.sma ? recortar(series.sma.valores) : null,
     ema: activos.ema ? recortar(series.ema.valores) : null,
-    rsi: activos.rsi ? recortar(series.rsi.valores) : null,
-    volume: activos.volume ? recortar(series.volume.valores) : null,
     bollinger: activos.bollinger ? {
       middle: recortar(series.bollinger.middle),
       upper: recortar(series.bollinger.upper),
@@ -163,8 +163,21 @@ function indicadoresVisibles(estado, inicio, fin) {
   };
 }
 
-// panel de velas - grafico o tabla segun el modo
-function panelVelas(estado, width, height, visibleCount) {
+// indicadores activos con recuadro propio bajo el grafico, con serie recortada a ventana
+function inferioresVisibles(estado, inicio, fin) {
+  return INDICADORES
+    .filter(({ nombre, inferior }) => inferior && estado.indicadores[nombre])
+    .map(({ nombre, inferior }) => ({ ...inferior, valores: estado.series[nombre].valores.slice(inicio, fin) }));
+}
+
+// alto de cajas inferiores y cuantas entran dejando al menos 10 filas
+function medidasInferiores(cantidad, height) {
+  const alto = Math.min(6, Math.max(3, Math.floor(height * 0.15))) + 3;
+  return { alto, entran: Math.max(0, Math.min(cantidad, Math.floor((height - 10) / alto))) };
+}
+
+// caja de indicador inferior - mismo ancho que el grafico
+function recuadroInferior(estado, vis, inferior, width, height) {
   const marco = {
     border: 'round',
     pad: [0, 1],
@@ -172,9 +185,29 @@ function panelVelas(estado, width, height, visibleCount) {
     borderStyle: estado.foco === 'grafico' ? { fg: 'accent' } : null
   };
   const { innerW, innerH } = boxSize(marco, width);
-  const error = estado.error ? sanitize(estado.error) : null;
+  const { titulo, ...carril } = inferior;
+  return box(rows([
+    text(titulo, { fg: 'muted' }),
+    graficoInferior({ velas: vis, width: innerW, height: Math.max(1, innerH - 1), ...carril }),
+  ]), marco);
+}
+
+// panel de velas - grafico o tabla segun modo, con espacio para indicadores inferiores
+function panelVelas(estado, width, height, visibleCount) {
   const { inicio, fin } = rangoVentanaVelas(estado.velas.length, visibleCount, estado.offset);
   const vis = estado.velas.slice(inicio, fin);
+  const indicadores = indicadoresVisibles(estado, inicio, fin);
+  const activos = estado.modoTabla ? [] : inferioresVisibles(estado, inicio, fin);
+  const { alto, entran } = medidasInferiores(activos.length, height);
+  const inferiores = activos.slice(0, entran);
+  const marco = {
+    border: 'round',
+    pad: [0, 1],
+    height: height - alto * inferiores.length,
+    borderStyle: estado.foco === 'grafico' ? { fg: 'accent' } : null
+  };
+  const { innerW, innerH } = boxSize(marco, width);
+  const error = estado.error ? sanitize(estado.error) : null;
   const precio = estado.velas.at(-1)?.close ?? estado.tickers[estado.symbol]?.price;
   const cabecera = estado.symbol + ' ' + estado.interval + ' | ' + fmtPrecio(precio)
     + ' | 24h:' + fmtVariacion(estado.variaciones[estado.symbol])
@@ -190,16 +223,18 @@ function panelVelas(estado, width, height, visibleCount) {
       interval: estado.interval,
       zoomY: estado.zoomY,
       offsetY: estado.offsetY,
-      indicadores: indicadoresVisibles(estado, inicio, fin),
+      indicadores,
     });
 
-  return box(rows([
+  const grafico = box(rows([
     text(cabecera, { fg: 'accent' }),
     text(leyendaIndicadores(estado), { fg: 'muted' }),
     gap(1),
     contenido,
     error ? text('err: ' + error, { fg: 'danger' }) : null
   ].filter(Boolean)), marco);
+  if (!inferiores.length) return grafico;
+  return rows([grafico, ...inferiores.map(inferior => recuadroInferior(estado, vis, inferior, width, alto))]);
 }
 
 export function vistaMonitor(estado) {
