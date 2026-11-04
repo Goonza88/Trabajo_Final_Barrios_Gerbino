@@ -296,7 +296,7 @@ test('el grafico muestra solo velas reales que entran en el area', () => {
 });
 
 test('la capacidad depende del ancho y modo tabla conserva ventana', () => {
-  const estado = { zoomX: 80, intervalos: ['1m', '5m', '1h', '4h', '1d'] };
+  const estado = { zoomX: 80, intervalos: ['1m', '5m', '1h', '4h', '1d'], borrador: { entrada: null, take_profit: null, stop_loss: null } };
   const capacidad = capacidadVelas(estado, 80);
 
   assert.ok(capacidad > 0 && capacidad < estado.zoomX);
@@ -314,7 +314,7 @@ test('la ventana muestra velas consecutivas', () => {
 });
 
 test('el monitor muestra velas consecutivas hasta el maximo que entra', () => {
-  const estado = { zoomX: 80, intervalos: ['1m', '5m', '1h', '4h', '1d'] };
+  const estado = { zoomX: 80, intervalos: ['1m', '5m', '1h', '4h', '1d'], borrador: { entrada: null, take_profit: null, stop_loss: null } };
   const capacidad = cantidadVelasVisibles(estado, 80);
   const fuente = velas(capacidad * 2);
   const { inicio, fin } = rangoVentanaVelas(fuente.length, capacidad);
@@ -397,7 +397,7 @@ test('vistaMonitor compone watchlist y grafico sin romper', async () => {
 test('el monitor arma la ayuda por secciones y la watchlist calcula el ancho para no cortarlas', () => {
   const secciones = seccionesAyuda(['1m', '5m', '1h', '4h', '1d']);
   assert.deepEqual(secciones, [
-    { lineas: ['Enter - Seleccionar', 'Tab - Cambiar Foco'], resumen: undefined },
+    { lineas: ['Espacio - Confirmar Orden', 'Enter - Seleccionar', 'Tab - Cambiar Foco'], resumen: undefined },
     { lineas: ['h - Izquierda', 'j - Abajo', 'k - Arriba', 'l - Derecha'], resumen: 'h-l - Desplazar' },
     { lineas: ['y - Alejar Horizontal', 'u - Alejar Vertical', 'i - Acercar Vertical', 'o - Acercar Horizontal'], resumen: 'y-o - Zoom' },
     { lineas: ['q - Take Profit', 'w - Entrada Limite', 'e - Stop Loss', 'r - Entrada Mercado'], resumen: 'q-r - Operacion' },
@@ -471,7 +471,7 @@ test('watchlist pega las ayudas al fondo y colorea la variacion 24h', () => {
 });
 
 test('watchlist muestra secciones completas cuando la terminal tiene altura', () => {
-  const { texto } = textoWatchlist(estadoWatchlist(['BTCUSDT', 'ETHUSDT']), 44);
+  const { texto } = textoWatchlist(estadoWatchlist(['BTCUSDT', 'ETHUSDT']), 46);
   const fin = texto.findIndex(linea => linea.includes('╰'));
 
   for (const linea of seccionesAyuda(['1m', '5m', '1h', '4h', '1d']).flatMap(seccion => seccion.lineas)) {
@@ -479,7 +479,7 @@ test('watchlist muestra secciones completas cuando la terminal tiene altura', ()
   }
   assert.equal(texto[fin - 2].trim(), '│                            │', 'con lugar las secciones van separadas');
   assert.match(texto[fin - 1], /Esc - Volver/);
-  assert.equal(texto.length, 44);
+  assert.equal(texto.length, 46);
 });
 
 test('la tabla pinta los valores de cada fila con el color de su vela', () => {

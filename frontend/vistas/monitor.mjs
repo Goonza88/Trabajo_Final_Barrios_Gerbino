@@ -1,32 +1,22 @@
 // reparte la pantalla entre watchlist y el grafico, mueve foco y escucha atajos
 // una tabla de atajos escucha el teclado, arma la ayuda y la guia de indicadores
 
-import { box, cols, gap, rows, split, text } from '../../backend/terminal/widgets.mjs';
+import { box, gap, rows, split, text } from '../../backend/terminal/widgets.mjs';
 import { size, invalidate, Sub } from '../../backend/terminal/runtime.mjs';
-import { sanitize, textWidth } from '../../backend/terminal/ansi.mjs';
+import { sanitize } from '../../backend/terminal/ansi.mjs';
 import { boxSize } from '../../backend/terminal/layout.mjs';
 import { crearEstado } from '../estado/mercado.mjs';
 import { anchoPlot } from '../graficos/trazos.mjs';
-import { graficoVelas, leerMira } from '../graficos/velas.mjs';
-import { graficoInferior } from '../graficos/inferior.mjs';
+import { graficoVelas, leerMira, miraEnVela } from '../graficos/velas.mjs';
 import { tablaVelas } from '../graficos/tabla.mjs';
 import { anchoWatchlist, fmtPrecio, fmtVariacion, vistaWatchlist } from '../features/watchlist.mjs';
+import { ANCHO_ORDEN, hayBorrador, vistaOrden } from '../features/orden.mjs';
+import { INDICADORES, cabecera, indicadoresVisibles, inferioresVisibles, leyendaIndicadores, medidasInferiores, recuadroInferior } from './indicadores.mjs';
 import { alternarMira, decimalesVisibles, marcarEntrada, marcarNivel, moverMiraMouse, moverMiraTeclado } from './mira.mjs';
 
 // ATAJOS ==========================================================================================
 
 const TECLAS_INTERVALO = ['a', 's', 'd', 'f', 'g'];
-
-// cada indicador con su tecla, su nombre y su etiqueta con los parametros de la serie
-const INDICADORES = [
-  { tecla: '1', nombre: 'sma', titulo: 'Media Simple', etiqueta: serie => 'SMA' + serie.periodo },
-  { tecla: '2', nombre: 'ema', titulo: 'Media Exponencial', etiqueta: serie => 'EMA' + serie.periodo },
-  { tecla: '3', nombre: 'rsi', titulo: 'RSI', etiqueta: serie => 'RSI' + serie.periodo,
-    inferior: { titulo: 'RSI 0-100', tope: 100, umbrales: [30, 70], style: { fg: 'success' } } },
-  { tecla: '4', nombre: 'volume', titulo: 'Volumen', etiqueta: () => 'VOL',
-    inferior: { titulo: 'VOL % max', colorDeVela: true } },
-  { tecla: '5', nombre: 'bollinger', titulo: 'Bandas de Bollinger', etiqueta: serie => 'BB' + serie.periodo + 'x' + serie.desviaciones },
-];
 
 // vuelve a pintar cuando termina una carga en segundo plano
 function alTerminarCarga(promesa) {
@@ -51,6 +41,26 @@ const oMira = (dir, accion) => monitor => {
   else accion(monitor);
 };
 
+// la caja de la orden cambia el ancho del grafico - la mira se queda en su vela
+const conservandoMira = accion => monitor => {
+  const { estado } = monitor;
+  const previas = opcionesActuales(estado);
+  const antes = estado.mira ? leerMira(previas) : null;
+  accion(monitor);
+  if (!antes || !estado.mira) return;
+  // la vela por su hora, o el lugar vacio por su distancia a la ultima vela
+  const opciones = opcionesActuales(estado);
+  const indice = antes.vela
+    ? opciones.velas.findIndex(vela => vela.open_time === antes.vela.open_time)
+    : opciones.velas.length - 1 + antes.indice - (previas.velas.length - 1);
+  if (indice >= 0) monitor.setMira(miraEnVela(opciones, indice, estado.mira.row));
+};
+
+// focos por los que pasa Tab - la caja de la orden solo mientras se ve
+function focosDisponibles(estado) {
+  return dimensiones(estado, size().cols).ordenW ? ['watchlist', 'grafico', 'orden'] : ['watchlist', 'grafico'];
+}
+
 // rango de teclas para la ayuda resumida de una seccion, como 'h-l'
 const rango = teclas => teclas[0] + '-' + teclas.at(-1);
 
@@ -59,21 +69,23 @@ function atajos(intervalos = []) {
   const teclasIntervalo = TECLAS_INTERVALO.slice(0, intervalos.length);
   return [
     { atajos: [
-      { teclas: ['Enter'], ayuda: 'Enter - Seleccionar', accion: monitor => {
-        if (monitor.estado.foco !== 'watchlist') return;
+      { teclas: [' '], foco: ['grafico', 'orden'], ayuda: 'Espacio - Confirmar Orden', accion: conservandoMira(monitor => monitor.confirmarBorrador()) },
+      { teclas: ['Enter'], foco: 'watchlist', ayuda: 'Enter - Seleccionar', accion: monitor => {
         monitor.setFoco('grafico');
         alTerminarCarga(monitor.seleccionarCursor());
       } },
-      { teclas: ['Tab'], ayuda: 'Tab - Cambiar Foco', accion: monitor => monitor.alternarFoco() },
+      { teclas: ['Tab'], ayuda: 'Tab - Cambiar Foco', accion: monitor => monitor.alternarFoco(focosDisponibles(monitor.estado)) },
     ] },
     { resumen: 'h-l - Desplazar', atajos: [
       { teclas: ['h', 'ArrowLeft'], ayuda: 'h - Izquierda', accion: oMira('h', enGrafico(monitor => monitor.mover('h', cantidadVelasVisibles(monitor.estado)))) },
       { teclas: ['j', 'ArrowDown'], ayuda: 'j - Abajo', accion: oMira('j', monitor => {
         if (monitor.estado.foco === 'watchlist') monitor.moverCursor(1);
+        else if (monitor.estado.foco === 'orden') monitor.cambiarPorcentaje('-');
         else monitor.mover('j');
       }) },
       { teclas: ['k', 'ArrowUp'], ayuda: 'k - Arriba', accion: oMira('k', monitor => {
         if (monitor.estado.foco === 'watchlist') monitor.moverCursor(-1);
+        else if (monitor.estado.foco === 'orden') monitor.cambiarPorcentaje('+');
         else monitor.mover('k');
       }) },
       { teclas: ['l', 'ArrowRight'], ayuda: 'l - Derecha', accion: oMira('l', enGrafico(monitor => monitor.mover('l', cantidadVelasVisibles(monitor.estado)))) },
@@ -85,13 +97,13 @@ function atajos(intervalos = []) {
       { teclas: ['o'], ayuda: 'o - Acercar Horizontal', accion: enGrafico(monitor => monitor.zoomH('+', capacidadZoom(monitor.estado))) },
     ] },
     { resumen: 'q-r - Operacion', atajos: [
-      { teclas: ['q'], ayuda: 'q - Take Profit', accion: conMira((monitor, opciones) => marcarNivel(monitor, opciones, 'take_profit')) },
-      { teclas: ['w'], ayuda: 'w - Entrada Limite', accion: conMira(marcarEntrada) },
-      { teclas: ['e'], ayuda: 'e - Stop Loss', accion: conMira((monitor, opciones) => marcarNivel(monitor, opciones, 'stop_loss')) },
-      { teclas: ['r'], ayuda: 'r - Entrada Mercado', accion: enGrafico(monitor => {
+      { teclas: ['q'], ayuda: 'q - Take Profit', accion: conservandoMira(conMira((monitor, opciones) => marcarNivel(monitor, opciones, 'take_profit'))) },
+      { teclas: ['w'], ayuda: 'w - Entrada Limite', accion: conservandoMira(conMira(marcarEntrada)) },
+      { teclas: ['e'], ayuda: 'e - Stop Loss', accion: conservandoMira(conMira((monitor, opciones) => marcarNivel(monitor, opciones, 'stop_loss'))) },
+      { teclas: ['r'], ayuda: 'r - Entrada Mercado', accion: conservandoMira(enGrafico(monitor => {
         const ultimo = monitor.estado.velas.at(-1)?.close;
         if (ultimo != null) monitor.fijarEntrada('mercado', fmtPrecio(ultimo));
-      }) },
+      })) },
     ] },
     { resumen: rango(teclasIntervalo) + ' - Intervalos', atajos: teclasIntervalo.map((tecla, i) => ({
       teclas: [tecla],
@@ -103,7 +115,7 @@ function atajos(intervalos = []) {
       { teclas: ['x'], ayuda: 'x - Iniciar Mira', accion: enGrafico(monitor => {
         if (!monitor.estado.modoTabla) alternarMira(monitor, opcionesActuales(monitor.estado));
       }) },
-      { teclas: ['c'], ayuda: 'c - Descartar Accion', accion: enGrafico(monitor => monitor.descartarBorrador()) },
+      { teclas: ['c'], ayuda: 'c - Descartar Accion', accion: conservandoMira(enGrafico(monitor => monitor.descartarBorrador())) },
     ] },
     { resumen: rango(INDICADORES.map(({ tecla }) => tecla)) + ' - Indicadores', atajos: INDICADORES.map(({ tecla, nombre, titulo }) => ({
       teclas: [tecla],
@@ -136,10 +148,12 @@ function fmtHora(ts) {
   try { return new Date(ts).toLocaleTimeString('es-AR'); } catch { return '-'; }
 }
 
+// anchos de watchlist, grafico y caja de la orden - la caja solo si hay orden y el grafico conserva 40 columnas
 function dimensiones(estado, cols) {
   const watchW = Math.max(anchoWatchlist(seccionesAyuda(estado.intervalos)), Math.min(32, Math.floor(cols * 0.38)));
-  const chartW = Math.max(1, cols - watchW - 1);
-  return { watchW, chartW };
+  const ordenW = hayBorrador(estado.borrador) && cols - watchW - ANCHO_ORDEN - 2 >= 40 ? ANCHO_ORDEN : 0;
+  const chartW = Math.max(1, cols - watchW - 1 - (ordenW ? ordenW + 1 : 0));
+  return { watchW, chartW, ordenW };
 }
 
 // cuantas velas entran en el grafico segun el ancho de la terminal
@@ -173,67 +187,6 @@ export function rangoVentanaVelas(total, cantidad, offset = 0) {
 
 // PANELES =========================================================================================
 
-// un texto por indicador, tenue apagado y resaltado encendido
-function leyendaIndicadores(estado) {
-  const activos = estado.indicadores;
-  return INDICADORES.map(({ tecla, nombre, etiqueta }) => text(
-    tecla + ':' + etiqueta(estado.series[nombre]),
-    { fg: activos[nombre] ? 'sec' : 'muted' }
-  ));
-}
-
-// fila de cabecera - titulo a la izquierda y a la derecha las partes que entran sin cortarlo
-function cabecera(titulo, partes, ancho) {
-  let libre = ancho - textWidth(titulo.content);
-  const entran = [];
-  for (const parte of partes) {
-    libre -= textWidth(parte.content) + 1;
-    if (libre < 0) break;
-    entran.push(parte);
-  }
-  const derecha = entran.reduce((total, parte) => total + textWidth(parte.content) + 1, 0);
-  return cols([titulo, ...entran], { widths: [Math.max(0, ancho - derecha)], gap: 1 });
-}
-
-// series de los indicadores activos, recortadas a ventana
-function indicadoresVisibles(estado, inicio, fin) {
-  const { series, indicadores: activos } = estado;
-  const recortar = valores => valores.slice(inicio, fin);
-  return {
-    sma: activos.sma ? recortar(series.sma.valores) : null,
-    ema: activos.ema ? recortar(series.ema.valores) : null,
-    bollinger: activos.bollinger ? {
-      middle: recortar(series.bollinger.middle),
-      upper: recortar(series.bollinger.upper),
-      lower: recortar(series.bollinger.lower),
-    } : null,
-  };
-}
-
-// indicadores activos con recuadro propio bajo el grafico, con serie recortada a ventana
-function inferioresVisibles(estado, inicio, fin) {
-  return INDICADORES
-    .filter(({ nombre, inferior }) => inferior && estado.indicadores[nombre])
-    .map(({ nombre, inferior }) => ({ ...inferior, valores: estado.series[nombre].valores.slice(inicio, fin) }));
-}
-
-// alto de cajas inferiores y cuantas entran dejando al menos 10 filas
-function medidasInferiores(cantidad, height) {
-  const alto = Math.min(6, Math.max(3, Math.floor(height * 0.15))) + 3;
-  return { alto, entran: Math.max(0, Math.min(cantidad, Math.floor((height - 10) / alto))) };
-}
-
-// caja de indicador inferior - mismo ancho que el grafico
-function recuadroInferior(vis, inferior, width, height) {
-  const marco = { border: 'round', pad: [0, 1], height, borderStyle: { fg: 'sec' } };
-  const { innerW, innerH } = boxSize(marco, width);
-  const { titulo, ...carril } = inferior;
-  return box(rows([
-    cabecera(text(''), [text(titulo, { fg: 'sec' })], innerW),
-    graficoInferior({ velas: vis, width: innerW, height: Math.max(1, innerH - 1), ...carril }),
-  ]), marco);
-}
-
 // medidas del panel de velas en pantalla
 function medidasPanel(estado, cols, height) {
   const { watchW, chartW } = dimensiones(estado, cols);
@@ -247,13 +200,20 @@ function medidasPanel(estado, cols, height) {
   return { chartW, inicio, fin, vacias, inferiores: activos.slice(0, entran), alto, marco, innerW, gridH: Math.max(2, innerH - 3), origen };
 }
 
-// lineas del borrador - a market la entrada sigue al ultimo precio
+// lineas de entrada, tp y sl
+const lineasOrden = ({ entrada, take_profit, stop_loss }) => [
+  { precio: entrada, style: { fg: 'text' } },
+  { precio: take_profit, style: { fg: 'success' } },
+  { precio: stop_loss, style: { fg: 'danger' } },
+];
+
+// lineas del borrador y de las operaciones vivas del simbolo
 function nivelesBorrador(estado) {
-  const { entrada, take_profit, stop_loss } = estado.borrador;
+  const vivas = estado.operaciones.filter(operacion =>
+    operacion.symbol === estado.symbol && (operacion.estado === 'abierta' || operacion.estado === 'pendiente'));
   return [
-    { precio: entrada, style: { fg: 'text' } },
-    { precio: take_profit, style: { fg: 'success' } },
-    { precio: stop_loss, style: { fg: 'danger' } },
+    ...vivas.flatMap(operacion => lineasOrden({ ...operacion, entrada: operacion.precio_entrada })),
+    ...lineasOrden(estado.borrador),
   ];
 }
 
@@ -303,7 +263,7 @@ function panelVelas(estado, medidas) {
   const opciones = opcionesGrafico(estado, medidas);
   const vis = opciones.velas;
   const marco = { ...medidas.marco, borderStyle: estado.foco === 'grafico' ? { fg: 'accent' } : null };
-  const error = estado.error ? sanitize(estado.error) : null;
+  const error = estado.error ?? estado.error_orden;
   const titulo = tituloGrafico(estado, opciones);
   const contenido = estado.modoTabla ? tablaVelas(vis) : graficoVelas(opciones);
 
@@ -311,7 +271,7 @@ function panelVelas(estado, medidas) {
     cabecera(text(titulo, { fg: 'accent' }), leyendaIndicadores(estado), innerW),
     gap(1),
     contenido,
-    error ? text('err: ' + error, { fg: 'danger' }) : null
+    error ? text('err: ' + sanitize(error), { fg: 'danger' }) : null
   ].filter(Boolean)), marco);
   if (!inferiores.length) return grafico;
   return rows([grafico, ...inferiores.map(inferior => recuadroInferior(vis, { ...inferior, vacias: opciones.vacias }, chartW, alto))]);
@@ -319,15 +279,16 @@ function panelVelas(estado, medidas) {
 
 export function vistaMonitor(estado) {
   const { cols, rows: height } = size();
-  const { watchW } = dimensiones(estado, cols);
+  const { watchW, ordenW } = dimensiones(estado, cols);
   return split({
     dir: 'h',
-    sizes: [watchW, null],
+    sizes: ordenW ? [watchW, null, ordenW] : [watchW, null],
     gap: 1,
     children: [
       vistaWatchlist(estado, { width: watchW, height, ayuda: seccionesAyuda(estado.intervalos) }),
-      panelVelas(estado, medidasPanel(estado, cols, height))
-    ]
+      panelVelas(estado, medidasPanel(estado, cols, height)),
+      ordenW ? vistaOrden(estado, { width: ordenW, height }) : null,
+    ].filter(Boolean)
   });
 }
 
@@ -347,8 +308,13 @@ export function crearMonitor({ salir, sondeoMs = 5000, ...opciones }) {
     subscriptions: [Sub.interval(sondeoMs, 'poll')],
     update: (model, event) => {
       if (event.type === 'key') {
-        const atajo = atajos(estado.intervalos).flatMap(seccion => seccion.atajos).find(a => a.teclas.includes(event.key));
-        atajo?.accion(monitor);
+        // una tecla puede tener un atajo por foco
+        const foco = estado.foco;
+        atajos(estado.intervalos).flatMap(seccion => seccion.atajos)
+          .filter(atajo => atajo.teclas.includes(event.key) && (atajo.foco == null || [atajo.foco].flat().includes(foco)))
+          .forEach(atajo => atajo.accion(monitor));
+        // si la caja de la orden se cerro con el foco puesto, vuelve al grafico
+        if (!focosDisponibles(estado).includes(estado.foco)) monitor.setFoco('grafico');
         return estado;
       }
       if (event.type === 'mouse') {

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { crearMonitor, seccionesAyuda } from '../frontend/vistas/monitor.mjs';
 import { crearEstado } from '../frontend/estado/mercado.mjs';
 import { flatten } from '../backend/terminal/view.mjs';
-import { sanitize } from '../backend/terminal/ansi.mjs';
+import { sanitize, toAnsi } from '../backend/terminal/ansi.mjs';
 
 const tecla = key => ({ type: 'key', key });
 
@@ -177,4 +177,82 @@ test('l desplaza pasada la ultima vela y la mira sigue hacia los lugares vacios'
 
   app.update(estado, tecla('h'));
   assert.ok(estado.mira.col < ultima, 'h vuelve a las velas');
+});
+
+test('Espacio confirma la orden con el foco en el grafico y Enter selecciona en la watchlist', () => {
+  const { app, estado } = monitorConVelas();
+  app.update(estado, tecla('x'));
+  for (let i = 0; i < 2; i++) app.update(estado, tecla('k'));
+  app.update(estado, tecla('q'));
+  app.update(estado, tecla('r'));
+  app.update(estado, tecla(' '));
+  assert.equal(estado.operaciones.length, 1);
+  assert.equal(estado.operaciones[0].tipo, 'mercado');
+
+  const lineas = flatten(app.view(estado), 80, 24).map(linea => sanitize(linea.content));
+  assert.ok(lineas.filter(linea => linea.includes('┄')).length >= 2, 'la operacion viva deja sus lineas');
+
+  app.update(estado, tecla(' '));
+  assert.equal(estado.operaciones.length, 1, 'sin borrador no crea otra');
+  assert.ok(flatten(app.view(estado), 80, 24).some(linea => sanitize(linea.content).includes('err: falta la entrada')));
+
+  app.update(estado, tecla('q'));
+  app.update(estado, tecla('r'));
+  app.update(estado, tecla('Tab'));
+  app.update(estado, tecla('Enter'));
+  assert.equal(estado.foco, 'grafico', 'en la watchlist Enter selecciona y vuelve al grafico');
+  assert.equal(estado.operaciones.length, 1, 'y no confirma la orden');
+});
+
+test('la caja de la orden abre con el borrador, muestra la vista previa y cierra al confirmar', () => {
+  const anterior = process.stdout.columns;
+  process.stdout.columns = 140;
+  try {
+    const { app, estado } = monitorConVelas();
+    const pantalla = () => flatten(app.view(estado), 140, 30).map(linea => sanitize(linea.content));
+    assert.ok(!pantalla().some(linea => linea.includes('orden')), 'sin borrador no hay caja');
+
+    const horaMira = () => pantalla()[1].match(/vela:[^|]+\| ([^│]+?)\s{2,}/)?.[1];
+    app.update(estado, tecla('x'));
+    for (let i = 0; i < 5; i++) app.update(estado, tecla('h'));
+    const vela = estado.mira.col;
+    const hora = horaMira();
+    for (let i = 0; i < 2; i++) app.update(estado, tecla('k'));
+    app.update(estado, tecla('q'));
+    assert.ok(pantalla().some(linea => linea.includes('orden')), 'un tp ya abre la caja');
+    assert.ok(pantalla().some(linea => linea.includes('falta la entrada')), 'y avisa que falta');
+    assert.notEqual(estado.mira.col, vela, 'el grafico se angosta');
+    assert.equal(horaMira(), hora, 'y la mira sigue en la misma vela');
+    app.update(estado, tecla('h'));
+    app.update(estado, tecla('l'));
+    const conCaja = estado.mira.col;
+
+    for (let i = 0; i < 6; i++) app.update(estado, tecla('j'));
+    app.update(estado, tecla('e'));
+    app.update(estado, tecla('r'));
+    app.update(estado, tecla('Tab'));
+    assert.equal(estado.foco, 'orden', 'despues del grafico Tab pasa por la caja de la orden');
+    app.update(estado, tecla('k'));
+    assert.equal(estado.porcentaje, '15', 'con foco k sube el porcentaje');
+    app.update(estado, tecla('j'));
+    app.update(estado, tecla('j'));
+    assert.equal(estado.porcentaje, '5');
+    const crudas = flatten(app.view(estado), 140, 30).map(linea => linea.content);
+    assert.ok(crudas.some(linea => linea.includes(toAnsi({ fg: 'accent', bg: 'selected' }) + 'porcentaje')), 'el porcentaje se resalta con foco');
+    const lineas = crudas.map(sanitize);
+    for (const texto of ['mercado', 'long', '5%', 'cartera', 'saldo', 'account']) {
+      assert.ok(lineas.some(linea => linea.includes(texto)), 'falta ' + texto);
+    }
+    assert.ok(lineas.some(linea => /en tp\s+\+\d/.test(linea)), 'el resultado en tp con signo');
+    assert.ok(lineas.some(linea => /ratio\s+\d+\.\d\d:1/.test(linea)), 'ganancia:perdida');
+
+    app.update(estado, tecla(' '));
+    assert.equal(estado.operaciones.length, 1);
+    assert.ok(!pantalla().some(linea => linea.includes('cartera')), 'al confirmar la caja cierra');
+    assert.equal(estado.foco, 'grafico', 'y el foco vuelve al grafico');
+    assert.notEqual(estado.mira.col, conCaja, 'el grafico vuelve al ancho completo');
+    assert.equal(horaMira(), hora, 'con la mira en la misma vela');
+  } finally {
+    process.stdout.columns = anterior;
+  }
 });

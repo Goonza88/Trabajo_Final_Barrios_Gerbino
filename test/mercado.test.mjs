@@ -360,3 +360,58 @@ test('zoomH sin limite de pantalla respeta el maximo de velas', () => {
   zoomH('-');
   assert.equal(estado.zoomX, 160);
 });
+
+test('confirmar el borrador crea una operacion con id, lo vacia y anota el evento', () => {
+  const { estado, fijarEntrada, fijarNivel, confirmarBorrador } = crearEstado({ cargarVelas: async () => [], ahora: () => 1000 });
+  fijarEntrada('mercado', '100');
+  fijarNivel('take_profit', '110');
+  fijarNivel('stop_loss', '95');
+  confirmarBorrador();
+
+  assert.equal(estado.operaciones.length, 1);
+  assert.deepEqual(
+    [estado.operaciones[0].id, estado.operaciones[0].lado, estado.operaciones[0].estado, estado.operaciones[0].cantidad],
+    [1, 'compra', 'abierta', '0.1'],
+    '10% de un saldo inicial de 100 a 100'
+  );
+  assert.deepEqual(estado.borrador, { tipo: null, entrada: null, take_profit: null, stop_loss: null });
+  assert.deepEqual(estado.eventos.map(evento => [evento.tipo, evento.en]), [['creada', 1000]]);
+});
+
+test('un borrador invalido no crea nada y deja el error hasta descartarlo', () => {
+  const { estado, fijarEntrada, confirmarBorrador, descartarBorrador } = crearEstado({ cargarVelas: async () => [] });
+  fijarEntrada('mercado', '100');
+  confirmarBorrador();
+  assert.equal(estado.operaciones.length, 0);
+  assert.match(estado.error_orden, /falta take profit o stop loss/);
+  descartarBorrador();
+  assert.equal(estado.error_orden, null);
+});
+
+test('cada carga de velas sigue las operaciones del simbolo y los tickers las de los otros', async () => {
+  let reloj = 1000;
+  let velasNuevas = [];
+  const { estado, fijarEntrada, fijarNivel, confirmarBorrador, cargar, cargarTickers } = crearEstado({
+    simbolos: ['BTCUSDT', 'ETHUSDT'],
+    ahora: () => reloj,
+    cargarVelas: async () => velasNuevas,
+    cargarTickers: async () => [ticker('BTCUSDT', '100', '100'), ticker('ETHUSDT', '40', '50')],
+  });
+  fijarEntrada('mercado', '100');
+  fijarNivel('take_profit', '110');
+  confirmarBorrador();
+  estado.symbol = 'ETHUSDT';
+  fijarEntrada('mercado', '50');
+  fijarNivel('stop_loss', '45');
+  confirmarBorrador();
+  estado.symbol = 'BTCUSDT';
+
+  reloj = 5000;
+  velasNuevas = [{ ...vela(0), open_time: 2000, open: '100', high: '111', low: '99', close: '105' }];
+  await cargar();
+  assert.deepEqual(estado.operaciones.map(op => [op.symbol, op.estado, op.motivo_cierre]), [['BTCUSDT', 'cerrada', 'tp'], ['ETHUSDT', 'abierta', null]]);
+
+  await cargarTickers();
+  assert.deepEqual(estado.operaciones.map(op => [op.symbol, op.estado, op.motivo_cierre]), [['BTCUSDT', 'cerrada', 'tp'], ['ETHUSDT', 'cerrada', 'sl']]);
+  assert.deepEqual(estado.eventos.map(evento => evento.tipo), ['creada', 'creada', 'cerrada', 'cerrada']);
+});

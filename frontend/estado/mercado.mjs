@@ -2,6 +2,7 @@
 
 import { cargarVelas as pedirVelas, cargarTickers as pedirTickers } from '../../backend/dominio/mercado.mjs';
 import { calcularIndicadores, calcularVariacion } from '../../backend/dominio/indicadores.mjs';
+import { crearPractica } from './operaciones.mjs';
 
 // limites del zoom horizontal, en velas visibles
 const ZOOM_X = Object.freeze({ min: 20, max: 160, paso: 5 });
@@ -9,17 +10,16 @@ const ZOOM_X = Object.freeze({ min: 20, max: 160, paso: 5 });
 // limites del zoom vertical, en veces el rango de precios
 const ZOOM_Y = Object.freeze({ min: 0.4, max: 3.0, paso: 0.1 });
 
-// orden sin confirmar - tipo y niveles marcados desde la mira
-const NIVELES_BORRADOR = ['take_profit', 'stop_loss'];
-const borradorVacio = () => ({ tipo: null, entrada: null, take_profit: null, stop_loss: null });
-
 export function crearEstado({
   symbol = 'BTCUSDT',
   simbolos = [symbol],
   interval = '1m',
   limite = 200,
   cargarVelas = pedirVelas,
-  cargarTickers: cargarTickersFn = pedirTickers
+  cargarTickers: cargarTickersFn = pedirTickers,
+  saldoInicial,
+  porcentaje,
+  ahora = Date.now
 } = {}) {
   const filtrados = Array.isArray(simbolos)
     ? [...new Set(simbolos.filter(s => typeof s === 'string' && s.trim() !== '').map(s => s.trim()))]
@@ -51,9 +51,10 @@ export function crearEstado({
     modoTabla: false,
     mira: null,
     modoMira: false,
-    borrador: borradorVacio(),
     indicadores: { sma: false, ema: false, rsi: false, volume: false, bollinger: true }
   };
+
+  const practica = crearPractica(estado, { saldoInicial, porcentaje, ahora });
 
   // carga en segundo plano - nueva cancela anterior y una respuesta vieja no pisa nueva
   function crearCarga(pedir, aplicar, fallar) {
@@ -111,6 +112,7 @@ export function crearEstado({
       estado.series = calcularIndicadores(norm);
       estado.actualizado_en = Date.now();
       estado.error = null;
+      practica.seguir(estado.symbol, norm, norm.at(-1)?.close ?? null);
     },
     e => { estado.error = e.message; }
   );
@@ -131,6 +133,10 @@ export function crearEstado({
       }
       estado.tickers = mapa;
       estado.variaciones = variaciones;
+      // las de otros simbolos siguen con el precio del ticker
+      for (const ticker of Object.values(mapa)) {
+        if (ticker.symbol !== estado.symbol) practica.seguir(ticker.symbol, [], ticker.price);
+      }
       estado.tickers_error = null;
       estado.tickers_actualizado_en = Date.now();
     },
@@ -165,7 +171,7 @@ export function crearEstado({
     estado.symbol = symbol;
     estado.cursor = estado.simbolos.indexOf(symbol);
     if (cambio) {
-      estado.borrador = borradorVacio();
+      practica.descartarBorrador();
       estado.velas = [];
       estado.actualizado_en = null;
       estado.error = null;
@@ -181,11 +187,12 @@ export function crearEstado({
   }
 
   function setFoco(foco) {
-    if (foco === 'watchlist' || foco === 'grafico') estado.foco = foco;
+    if (foco === 'watchlist' || foco === 'grafico' || foco === 'orden') estado.foco = foco;
   }
 
-  function alternarFoco() {
-    estado.foco = estado.foco === 'watchlist' ? 'grafico' : 'watchlist';
+  // pasa al siguiente de los focos disponibles
+  function alternarFoco(focos = ['watchlist', 'grafico']) {
+    estado.foco = focos[(focos.indexOf(estado.foco) + 1) % focos.length];
   }
 
   function alternarIndicador(nombre) {
@@ -216,21 +223,6 @@ export function crearEstado({
   function alternarModoMira() {
     estado.modoMira = !estado.modoMira;
     if (!estado.modoMira) estado.mira = null;
-  }
-
-  function fijarNivel(campo, precio) {
-    if (NIVELES_BORRADOR.includes(campo)) estado.borrador[campo] = precio;
-  }
-
-  // entrada limite en un precio elegido o a mercado al ultimo precio
-  function fijarEntrada(tipo, precio) {
-    if (tipo !== 'mercado' && tipo !== 'limite') return;
-    estado.borrador.tipo = tipo;
-    estado.borrador.entrada = precio;
-  }
-
-  function descartarBorrador() {
-    estado.borrador = borradorVacio();
   }
 
   function alternarTabla() {
@@ -277,9 +269,11 @@ export function crearEstado({
     alternarTabla,
     setMira,
     alternarModoMira,
-    fijarNivel,
-    fijarEntrada,
-    descartarBorrador,
+    fijarNivel: practica.fijarNivel,
+    fijarEntrada: practica.fijarEntrada,
+    descartarBorrador: practica.descartarBorrador,
+    confirmarBorrador: practica.confirmarBorrador,
+    cambiarPorcentaje: practica.cambiarPorcentaje,
     reiniciarVista,
     mover,
     cancelar

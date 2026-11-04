@@ -1,8 +1,11 @@
 // casos de uso de operaciones de practica - validan el borrador y deciden activaciones y cierres
 
 import { comparar, parse } from '../metricas/decimal.mjs';
-import { cantidadPorPorcentaje } from '../metricas/operaciones.mjs';
+import { cantidadPorPorcentaje, pnlOperacion } from '../metricas/operaciones.mjs';
 import { activacionPendiente, cierrePorNivel } from '../metricas/niveles.mjs';
+
+// cartera y metricas pasan por el dominio, la interfaz no llama a metricas
+export { metricasOperaciones, resumenCartera } from '../metricas/operaciones.mjs';
 
 // lado segun donde queda el take profit, o el stop loss si no hay
 function ladoDe(entrada, tp, sl) {
@@ -49,6 +52,21 @@ export function crearOperacion(borrador, { exchange_id, symbol, saldo, porcentaj
     notas: null,
     tags: [],
   };
+}
+
+// vista previa del borrador - lado, cantidad y resultado en tp y sl, o el error que impide confirmarlo
+export function previsualizarBorrador(borrador, { saldo, porcentaje }) {
+  try {
+    const operacion = crearOperacion(borrador, { exchange_id: null, symbol: null, saldo, porcentaje, ahora: 0 });
+    const cerrarEn = precio => precio == null ? null : pnlOperacion({ ...operacion, estado: 'cerrada', precio_salida: precio });
+    const en_tp = cerrarEn(operacion.take_profit);
+    const en_sl = cerrarEn(operacion.stop_loss);
+    // ganancia en tp por cada unidad de perdida en sl
+    const ratio = en_tp != null && en_sl != null && Number(en_sl) < 0 ? Number(en_tp) / -Number(en_sl) : null;
+    return { lado: operacion.lado, cantidad: operacion.cantidad, en_tp, en_sl, ratio, error: null };
+  } catch (e) {
+    return { lado: null, cantidad: null, en_tp: null, en_sl: null, ratio: null, error: e.message };
+  }
 }
 
 // velas que cuentan desde un instante y el precio actual como una vela sin rango
