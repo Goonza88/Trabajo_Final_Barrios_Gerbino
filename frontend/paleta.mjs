@@ -6,8 +6,8 @@ export const PALETA = {
   accent:    '#BCF734', // lime   - color de marca, titulos y foco
   sec:       '#62798B', // blue   - texto secundario, hints y teclas
   danger:    '#FB524C', // red    - errores y datos en rojo
-  muted:     '#62798B', // blue   - azul gris para detalles secundarios
-  reader:    '#62798B', // blue   - cursor de input y tramo vacio de la barra
+  muted:     '#445561', // blue   - azul gris tenue para lineas de grilla
+  reader:    '#62798B', // blue   - cursor y placeholder de input, tramo vacio de la barra
   success:   '#538E07', // green  - estados positivos
   selected:  '#000608', // black  - fondo de la fila seleccionada
   successBg: '#0f1a01', // green  - success al 18%, fondo superior para indicadores

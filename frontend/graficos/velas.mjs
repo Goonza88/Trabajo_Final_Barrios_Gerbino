@@ -176,7 +176,7 @@ export function graficoVelas({
     : null;
 
   if (!velas.length) {
-    putText(cells, 0, 0, 'sin velas', { fg: 'muted' });
+    putText(cells, 0, 0, 'sin velas', { fg: 'sec' });
     return grid({ width: totalW, height: totalH, cells });
   }
 
@@ -459,8 +459,8 @@ export function graficoVelas({
     for (let c = 0; c < plotW; c++) {
       let cell = plot[r][c];
       if (!cell) {
-        if (columnasEtiqueta.has(c)) cell = { ch: '·', style: { fg: 'sec' } };
-        else if (ygrid.has(r)) cell = { ch: '·', style: { fg: 'reader' } };
+        if (columnasEtiqueta.has(c)) cell = { ch: '·', style: { fg: 'muted' } };
+        else if (ygrid.has(r)) cell = { ch: '·', style: { fg: 'muted' } };
       }
       const bg = bandBackground[r][c];
       if (bg) {
@@ -527,7 +527,7 @@ export function graficoInferior({
   if (totalH >= 3) {
     for (const nivel of umbrales) {
       const row = Math.round(fila(nivel));
-      for (let col = 0; col < plotW; col++) celdaLinea(carril, row, col, '·', { fg: 'reader' });
+      for (let col = 0; col < plotW; col++) celdaLinea(carril, row, col, '·', { fg: 'muted' });
     }
   }
   const estilo = colorDeVela ? i => estiloVela(visibles[i]) : () => style;

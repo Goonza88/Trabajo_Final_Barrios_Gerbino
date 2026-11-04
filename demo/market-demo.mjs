@@ -60,10 +60,10 @@ run({
     gap(),
     ...(model.lineas.length
       ? model.lineas.map(l => text(l.s, { fg: l.ok ? 'text' : 'danger' }))
-      : [text('esperando respuesta de la api...', { fg: 'muted' })]),
+      : [text('esperando respuesta de la api...', { fg: 'sec' })]),
     gap(),
-    text(model.hora ? `ultima consulta ${model.hora.toLocaleTimeString('es-AR')}` : 'cargando...', { fg: 'muted' }),
-    text(`refresco cada ${POLL_INTERVAL_MS} ms`, { fg: 'muted' }),
+    text(model.hora ? `ultima consulta ${model.hora.toLocaleTimeString('es-AR')}` : 'cargando...', { fg: 'sec' }),
+    text(`refresco cada ${POLL_INTERVAL_MS} ms`, { fg: 'sec' }),
     gap(),
     text('q salir', { fg: 'sec' }),
   ]), { border: 'round', pad: [0, 1], height: size().rows }),

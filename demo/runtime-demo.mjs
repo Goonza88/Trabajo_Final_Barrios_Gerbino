@@ -27,11 +27,11 @@ function build(state) {
     text('q salir', { fg: 'sec' }),
     text('a update lento', { fg: 'sec' }),
     text('e error a proposito', { fg: 'sec' }),
-    text('Ctrl+c sale al segundo', { fg: 'muted' }),
+    text('Ctrl+c sale al segundo', { fg: 'sec' }),
   ]), { border: 'round', height: h, pad: [0, 1] });
 
   const room = Math.max(0, h - 4);
-  const events = state.log.slice(-room).map(ev => text(sanitize(JSON.stringify(ev)), { fg: 'muted' }));
+  const events = state.log.slice(-room).map(ev => text(sanitize(JSON.stringify(ev)), { fg: 'sec' }));
   const right = box(rows([
     gap(1),
     text('eventos', { fg: 'accent', bold: true }),

@@ -342,6 +342,29 @@ test('el monitor pone rsi y volumen cada uno en su recuadro bajo el grafico', as
   assert.doesNotMatch(texto(), /RSI 0-100/, 'la tabla no lleva recuadro');
 });
 
+test('la leyenda va a la derecha del titulo y resalta los indicadores encendidos', async () => {
+  const { estado, cargar } = crearEstado({ cargarVelas: async () => velas(30) });
+  await cargar();
+  estado.indicadores.rsi = true;
+  const anterior = process.stdout.columns;
+  process.stdout.columns = 140;
+  try {
+    const lineas = flatten(vistaMonitor(estado), 140, 24);
+    const primera = lineas[1].content;
+    const texto = sanitize(primera);
+    assert.match(texto, /│ BTCUSDT 1m \|.* 1:SMA20 2:EMA20 3:RSI14 4:VOL 5:BB20x2 │$/);
+    assert.ok(primera.includes(toAnsi({ fg: 'muted' }) + '1:SMA20'), 'apagado va tenue');
+    assert.ok(primera.includes(toAnsi({ fg: 'sec' }) + '3:RSI14'), 'encendido va resaltado');
+
+    const textos = lineas.map(linea => sanitize(linea.content));
+    const rsi = textos.findIndex(t => t.includes('RSI 0-100'));
+    assert.match(textos[rsi], /\s{20,}RSI 0-100 │$/, 'el titulo del recuadro va a la derecha');
+    assert.match(textos[rsi + 1], /│ 100 /, 'el carril arranca en la fila siguiente');
+  } finally {
+    process.stdout.columns = anterior;
+  }
+});
+
 test('vistaMonitor compone watchlist y grafico sin romper', async () => {
   const { estado, cargar, cargarTickers } = crearEstado({
     simbolos: ['BTCUSDT', 'ETHUSDT'],

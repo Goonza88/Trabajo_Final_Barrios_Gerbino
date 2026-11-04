@@ -28,8 +28,8 @@ function paint() {
   const w = cols(), h = rows();
   const inner = Math.max(0, w - 4);
   let out = escape.hide + escape.goto(1, 1) + escape.clearScreen;
-  out += escape.goto(1, 1) + palette.muted + '╭' + '─'.repeat(Math.max(0, w - 2)) + '╮' + escape.reset;
-  out += escape.goto(h, 1) + palette.muted + '╰' + '─'.repeat(Math.max(0, w - 2)) + '╯' + escape.reset;
+  out += escape.goto(1, 1) + palette.reader + '╭' + '─'.repeat(Math.max(0, w - 2)) + '╮' + escape.reset;
+  out += escape.goto(h, 1) + palette.reader + '╰' + '─'.repeat(Math.max(0, w - 2)) + '╯' + escape.reset;
   for (let rowNum = 2; rowNum < h; rowNum++) {
     let content = '';
     if (rowNum === 2) content = palette.accent + 'demo - input + ansi || q para salir' + escape.reset;
@@ -37,7 +37,7 @@ function paint() {
     if (rowNum === h - 1) content = escape.reset + palette.accent + 'input: ' + escape.reset + truncateTo(state.input.value || 'usa el teclado', Math.max(4, w - 12)) + palette.reader + '█' + escape.reset;
     const safe = truncateTo(content, inner);
     const pad = Math.max(0, inner - textWidth(safe));
-    out += escape.goto(rowNum, 1) + palette.muted + '│' + escape.reset + ' ' + safe + ' '.repeat(pad) + escape.reset + ' ' + palette.muted + '│' + escape.reset;
+    out += escape.goto(rowNum, 1) + palette.reader + '│' + escape.reset + ' ' + safe + ' '.repeat(pad) + escape.reset + ' ' + palette.reader + '│' + escape.reset;
   }
   process.stdout.write(out);
 }

@@ -1,9 +1,9 @@
 // reparte la pantalla entre watchlist y el grafico, mueve foco y escucha atajos
 // una tabla de atajos escucha el teclado, arma la ayuda y la guia de indicadores
 
-import { box, gap, rows, split, text } from '../../backend/terminal/widgets.mjs';
+import { box, cols, gap, rows, split, text } from '../../backend/terminal/widgets.mjs';
 import { size, invalidate, Sub } from '../../backend/terminal/runtime.mjs';
-import { sanitize } from '../../backend/terminal/ansi.mjs';
+import { sanitize, textWidth } from '../../backend/terminal/ansi.mjs';
 import { boxSize } from '../../backend/terminal/layout.mjs';
 import { crearEstado } from '../estado/mercado.mjs';
 import { anchoPlot, graficoInferior, graficoVelas, tablaVelas } from '../graficos/velas.mjs';
@@ -141,11 +141,26 @@ export function rangoVentanaVelas(total, cantidad, offset = 0) {
 
 // PANELES =========================================================================================
 
+// un texto por indicador, tenue apagado y resaltado encendido
 function leyendaIndicadores(estado) {
   const activos = estado.indicadores;
-  return INDICADORES
-    .map(({ tecla, nombre, etiqueta }) => tecla + ':' + etiqueta(estado.series[nombre]) + (activos[nombre] ? '+' : '-'))
-    .join(' ');
+  return INDICADORES.map(({ tecla, nombre, etiqueta }) => text(
+    tecla + ':' + etiqueta(estado.series[nombre]),
+    { fg: activos[nombre] ? 'sec' : 'muted' }
+  ));
+}
+
+// fila de cabecera - titulo a la izquierda y a la derecha las partes que entran sin cortarlo
+function cabecera(titulo, partes, ancho) {
+  let libre = ancho - textWidth(titulo.content);
+  const entran = [];
+  for (const parte of partes) {
+    libre -= textWidth(parte.content) + 1;
+    if (libre < 0) break;
+    entran.push(parte);
+  }
+  const derecha = entran.reduce((total, parte) => total + textWidth(parte.content) + 1, 0);
+  return cols([titulo, ...entran], { widths: [Math.max(0, ancho - derecha)], gap: 1 });
 }
 
 // series de los indicadores activos, recortadas a la ventana visible
@@ -177,17 +192,12 @@ function medidasInferiores(cantidad, height) {
 }
 
 // caja de indicador inferior - mismo ancho que el grafico
-function recuadroInferior(estado, vis, inferior, width, height) {
-  const marco = {
-    border: 'round',
-    pad: [0, 1],
-    height,
-    borderStyle: estado.foco === 'grafico' ? { fg: 'accent' } : null
-  };
+function recuadroInferior(vis, inferior, width, height) {
+  const marco = { border: 'round', pad: [0, 1], height, borderStyle: { fg: 'sec' } };
   const { innerW, innerH } = boxSize(marco, width);
   const { titulo, ...carril } = inferior;
   return box(rows([
-    text(titulo, { fg: 'muted' }),
+    cabecera(text(''), [text(titulo, { fg: 'sec' })], innerW),
     graficoInferior({ velas: vis, width: innerW, height: Math.max(1, innerH - 1), ...carril }),
   ]), marco);
 }
@@ -209,7 +219,7 @@ function panelVelas(estado, width, height, visibleCount) {
   const { innerW, innerH } = boxSize(marco, width);
   const error = estado.error ? sanitize(estado.error) : null;
   const precio = estado.velas.at(-1)?.close ?? estado.tickers[estado.symbol]?.price;
-  const cabecera = estado.symbol + ' ' + estado.interval + ' | ' + fmtPrecio(precio)
+  const titulo = estado.symbol + ' ' + estado.interval + ' | ' + fmtPrecio(precio)
     + ' | 24h:' + fmtVariacion(estado.variaciones[estado.symbol])
     + ' | ' + fmtHora(estado.actualizado_en);
 
@@ -218,7 +228,7 @@ function panelVelas(estado, width, height, visibleCount) {
     : graficoVelas({
       velas: vis,
       width: innerW,
-      height: Math.max(2, innerH - 4),
+      height: Math.max(2, innerH - 3),
       showAxis: true,
       interval: estado.interval,
       zoomY: estado.zoomY,
@@ -227,14 +237,13 @@ function panelVelas(estado, width, height, visibleCount) {
     });
 
   const grafico = box(rows([
-    text(cabecera, { fg: 'accent' }),
-    text(leyendaIndicadores(estado), { fg: 'muted' }),
+    cabecera(text(titulo, { fg: 'accent' }), leyendaIndicadores(estado), innerW),
     gap(1),
     contenido,
     error ? text('err: ' + error, { fg: 'danger' }) : null
   ].filter(Boolean)), marco);
   if (!inferiores.length) return grafico;
-  return rows([grafico, ...inferiores.map(inferior => recuadroInferior(estado, vis, inferior, width, alto))]);
+  return rows([grafico, ...inferiores.map(inferior => recuadroInferior(vis, inferior, width, alto))]);
 }
 
 export function vistaMonitor(estado) {

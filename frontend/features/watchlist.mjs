@@ -76,7 +76,7 @@ export function vistaWatchlist(estado, { width, height, ayuda }) {
   if (error) contenido.push(text('err: ' + error, { fg: 'danger' }));
   if (conSeparacion) contenido.push(gap(1 + relleno));
   else if (relleno > 0) contenido.push(gap(relleno));
-  contenido.push(...ayudas.map(linea => text(linea, { fg: 'muted' })));
+  contenido.push(...ayudas.map(linea => text(linea, { fg: 'sec' })));
 
   return box(rows(contenido), marco);
 }

@@ -248,7 +248,7 @@ function paintTable(ctx, node, width) {
   const header = headers.length
     ? Array.from({ length: colCount }, (_, col) => render(headers[col], col)).join(' '.repeat(gapW))
     : '';
-  if (header) pushStyled(ctx, header, palette.muted, width);
+  if (header) pushStyled(ctx, header, palette.sec, width);
   for (let row = 0; row < rowsArr.length; row++) {
     const isSelected = node.cursor != null && row === node.cursor;
     const bg = isSelected ? 'selected' : '';
@@ -307,7 +307,7 @@ function paintInput(ctx, node, width) {
   const slice = chars.slice(start, start + visible);
   const at = caret - start + (dots ? 1 : 0);
   let body;
-  if (!node.focused) body = (empty ? palette.muted : '') + slice.join('') + escape.reset;
+  if (!node.focused) body = (empty ? palette.reader : '') + slice.join('') + escape.reset;
   else if (at < slice.length) body = slice.slice(0, at).join('') + toAnsi({ fg: 'accent', bg: 'reader' }) + slice[at] + escape.reset + slice.slice(at + 1).join('');
   else body = slice.join('') + toAnsi({ bg: 'reader' }) + ' ' + escape.reset;
   const head = (node.label ? node.label + ' ' : '') + (dots ? '…' : '');

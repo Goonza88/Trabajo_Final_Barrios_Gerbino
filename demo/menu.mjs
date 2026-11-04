@@ -10,7 +10,7 @@ import { PALETA } from '../frontend/paleta.mjs';
 setPalette(PALETA);
 
 const OPCION  = toAnsi({ fg: 'sec' });
-const DETALLE = toAnsi({ fg: 'muted' });
+const DETALLE = toAnsi({ fg: 'sec' });
 const PROMPT  = `${OPCION}elegi uno:${escape.reset} `;
 
 const DEMOS = [ // demos del substrato (demo/)
@@ -46,7 +46,7 @@ function pintar() {
       text(`${OPCION}${i + 1})${escape.reset} ${nombre.padEnd(9)} ${DETALLE}${que}${escape.reset}`),
     ]),
     gap(),
-    text('0) salir', { fg: 'muted' }),
+    text('0) salir', { fg: 'sec' }),
     ...(aviso ? [text(aviso, { fg: 'danger' })] : []),
   ]), { border: 'round', pad: [0, 1], height: alto });
 

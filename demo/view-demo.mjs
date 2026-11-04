@@ -26,7 +26,7 @@ function build(state) {
   ]), { border: 'round', height: h, pad: [0, 1] });
 
   const room = Math.max(0, h - 8);
-  const events = state.log.slice(-room).map(ev => text(sanitize(JSON.stringify(ev)), { fg: 'muted' }));
+  const events = state.log.slice(-room).map(ev => text(sanitize(JSON.stringify(ev)), { fg: 'sec' }));
   const right = box(rows([
     gap(1),
     text('eventos', { fg: 'accent', bold: true }),
