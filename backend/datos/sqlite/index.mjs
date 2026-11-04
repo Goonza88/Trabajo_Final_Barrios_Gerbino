@@ -77,13 +77,26 @@ function checkAlert(db, value) {
 }
 
 function attachTags(db, table, key, records) {
-  return records.map(record => {
-    const tags = rows(
-      db.prepare('SELECT tag FROM ' + table + ' WHERE ' + key + '=? ORDER BY tag'),
-      record.id
-    ).map(value => value.tag);
-    return { ...record, tags };
-  });
+  if (records.length === 0) return [];
+  const ids = records.map(record => record.id);
+  const placeholders = ids.map(() => '?').join(', ');
+  const taggedRecords = rows(
+    db.prepare(
+      'SELECT ' + key + ', tag FROM ' + table +
+      ' WHERE ' + key + ' IN (' + placeholders + ') ORDER BY ' + key + ', tag'
+    ),
+    ...ids
+  );
+  const tagsById = new Map();
+  for (const taggedRecord of taggedRecords) {
+    const id = taggedRecord[key];
+    if (!tagsById.has(id)) tagsById.set(id, []);
+    tagsById.get(id).push(taggedRecord.tag);
+  }
+  return records.map(record => ({
+    ...record,
+    tags: tagsById.get(record.id) ?? [],
+  }));
 }
 
 function oneWithTags(db, table, key, record) {

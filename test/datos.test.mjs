@@ -186,6 +186,7 @@ test('operaciones: alta, tags, cierre y cancelacion', () => {
     });
     assert.equal(datos.operations.cancelOperation(paraCancelar.id).estado, 'cancelada');
     assert.equal(datos.operations.listOperations().length, 2);
+    assert.deepEqual(datos.operations.listOperations()[0].tags, ['ruptura']);
   });
 });
 
@@ -201,12 +202,230 @@ test('notas y busqueda', () => {
 
     assert.deepEqual(nota.tags, ['analisis']);
     assert.equal(datos.notes.listNotes({ busqueda: 'VOLUMEN' }).length, 1);
+    assert.deepEqual(datos.notes.listNotes({ busqueda: 'VOLUMEN' })[0].tags, ['analisis']);
     assert.equal(datos.notes.listNotes({ busqueda: 'ethereum' }).length, 0);
 
     datos.notes.createNote({ titulo: 'Año de ESPAÑA', cuerpo: 'Señal de COMPRA' });
     assert.equal(datos.notes.listNotes({ busqueda: 'AÑO' }).length, 1);
     assert.equal(datos.notes.listNotes({ busqueda: 'españa' }).length, 1);
     assert.equal(datos.notes.listNotes({ busqueda: 'SEÑAL' }).length, 1);
+  });
+});
+
+test('errores definidos en el contrato', () => {
+  conDatos(datos => {
+    function error(metodo, mensaje) {
+      assert.throws(metodo, resultado => resultado.message === mensaje);
+    }
+
+    error(
+      () => datos.operations.registerOperation({
+        exchange_id: 'binance',
+        symbol: 'BTCUSDT',
+        lado: 'compra',
+        tipo: 'mercado',
+        cantidad: '1.',
+        precio_entrada: '100'
+      }),
+      'decimal invalido en cantidad: 1.'
+    );
+    error(() => datos.operations.getOperation(0), 'entero invalido en operacion_id: 0');
+    error(() => datos.catalog.registerExchange(null), 'se espera un objeto');
+    error(() => datos.notes.listNotes({ buscar: 'x' }), 'campo desconocido: buscar');
+    error(() => datos.market.saveCandles(null), 'se espera una lista de velas');
+    error(() => datos.notes.createNote({ cuerpo: 'texto' }), 'parametro requerido: titulo');
+    error(() => datos.notes.createNote({ titulo: '', cuerpo: 'texto' }), 'texto invalido en titulo: ');
+    error(
+      () => datos.market.saveCandles([{ exchange_id: 'binance', symbol: 'BTCUSDT' }]),
+      'parametro requerido: interval'
+    );
+
+    error(
+      () => datos.catalog.registerExchange({
+        id: 'binance',
+        nombre: 'Binance',
+        base_url: 'https://api.example',
+        ws_url: 'wss://api.example',
+        peso_por_consulta: 2,
+        limite_por_minuto: 6000
+      }),
+      'exchange ya registrado: binance'
+    );
+    error(
+      () => datos.catalog.registerSymbol({
+        exchange_id: 'binance',
+        symbol: 'BTCUSDT',
+        base: 'BTC',
+        quote: 'USDT'
+      }),
+      'simbolo ya registrado: binance/BTCUSDT'
+    );
+    error(
+      () => datos.catalog.registerSymbol({
+        exchange_id: 'otro',
+        symbol: 'BTCUSDT',
+        base: 'BTC',
+        quote: 'USDT'
+      }),
+      'exchange inexistente: otro'
+    );
+    error(
+      () => datos.market.saveTicker({
+        exchange_id: 'binance',
+        symbol: 'NOEXISTE',
+        timestamp: 1,
+        price: '100'
+      }),
+      'simbolo inexistente: binance/NOEXISTE'
+    );
+
+    datos.catalog.registerSymbol({
+      exchange_id: 'binance',
+      symbol: 'XRPUSDT',
+      base: 'XRP',
+      quote: 'USDT'
+    });
+    error(
+      () => datos.market.saveCandles([{ ...vela(1), symbol: 'XRPUSDT' }]),
+      'intervalo no habilitado: binance/XRPUSDT/1m'
+    );
+    error(
+      () => datos.config.saveConfig({
+        intervalo_por_defecto: '1m',
+        exchange_id: 'binance',
+        simbolo_por_defecto: 'XRPUSDT',
+        fuente: 'local',
+        sondeo_ms: 5000
+      }),
+      'el intervalo 1m no esta habilitado para binance/XRPUSDT'
+    );
+
+    error(
+      () => datos.config.saveConfig({
+        intervalo_por_defecto: '1m',
+        exchange_id: 'binance',
+        fuente: 'local',
+        sondeo_ms: 5000
+      }),
+      'exchange_id y simbolo_por_defecto van juntos'
+    );
+    error(
+      () => datos.config.saveConfig({
+        intervalo_por_defecto: '1m',
+        fuente: 'remoto',
+        sondeo_ms: 5000
+      }),
+      'fuente remoto necesita fuente_url'
+    );
+    error(
+      () => datos.config.saveConfig({
+        intervalo_por_defecto: '1m',
+        fuente: 'local',
+        fuente_url: 'https://api.example',
+        sondeo_ms: 5000
+      }),
+      'fuente_url solo va en remoto'
+    );
+    error(
+      () => datos.config.saveConfig({
+        intervalo_por_defecto: '1m',
+        exchange_id: 'binance',
+        simbolo_por_defecto: '',
+        fuente: 'local',
+        sondeo_ms: 5000
+      }),
+      'texto invalido en simbolo_por_defecto: '
+    );
+
+    error(
+      () => datos.alerts.createAlert({
+        exchange_id: 'binance',
+        symbol: 'BTCUSDT',
+        tipo: 'precio',
+        campo: 'change24h',
+        operador: '>',
+        valor: '100',
+        timeframe: '1m'
+      }),
+      'campo change24h no corresponde al tipo precio (se espera price)'
+    );
+    error(
+      () => datos.alerts.createAlert({
+        exchange_id: 'binance',
+        symbol: 'BTCUSDT',
+        tipo: 'precio',
+        campo: 'price',
+        operador: '!=',
+        valor: '100',
+        timeframe: '1m',
+        activa: 2
+      }),
+      'operador invalido: != (se espera uno de >, >=, <, <=, ==, cruza_arriba, cruza_abajo)'
+    );
+    error(
+      () => datos.alerts.createAlert({
+        exchange_id: 'binance',
+        symbol: 'BTCUSDT',
+        tipo: 'precio',
+        campo: 'price',
+        operador: '>',
+        valor: '100',
+        timeframe: '1m',
+        activa: 2
+      }),
+      'booleano invalido en activa: 2'
+    );
+
+    const lista = datos.watchlist.createWatchlist('Favoritos');
+    const item = { exchange_id: 'binance', symbol: 'BTCUSDT' };
+    datos.watchlist.addItem(lista.id, item);
+    error(
+      () => datos.watchlist.addItem(lista.id, item),
+      'el simbolo ya esta en la watchlist: binance/BTCUSDT'
+    );
+    error(
+      () => datos.watchlist.removeItem(lista.id, 'binance', 'ETHUSDT'),
+      'el simbolo no esta en la watchlist: binance/ETHUSDT'
+    );
+    error(() => datos.watchlist.deleteWatchlist(999), 'watchlist inexistente: 999');
+    error(() => datos.alerts.deleteAlert(999), 'alerta inexistente: 999');
+    error(() => datos.operations.cancelOperation(999), 'operacion inexistente: 999');
+    error(() => datos.notes.deleteNote(999), 'nota inexistente: 999');
+
+    const abierta = datos.operations.registerOperation({
+      exchange_id: 'binance',
+      symbol: 'BTCUSDT',
+      lado: 'compra',
+      tipo: 'mercado',
+      cantidad: '1',
+      precio_entrada: '100',
+      tags: ['ruptura']
+    });
+    error(
+      () => datos.operations.addTag(abierta.id, 'ruptura'),
+      'la tag ya esta: ruptura'
+    );
+    error(
+      () => datos.operations.removeTag(abierta.id, 'inexistente'),
+      'la tag no existe: inexistente'
+    );
+    error(
+      () => datos.operations.registerOperation({
+        exchange_id: 'binance',
+        symbol: 'BTCUSDT',
+        lado: 'compra',
+        tipo: 'mercado',
+        cantidad: '1',
+        precio_entrada: '100',
+        tags: ['repetida', 'repetida']
+      }),
+      'tag repetida: repetida'
+    );
+    datos.operations.closeOperation(abierta.id, { precio_salida: '110' });
+    error(
+      () => datos.operations.closeOperation(abierta.id, { precio_salida: '120' }),
+      'la operacion no esta abierta: cerrada'
+    );
   });
 });
 

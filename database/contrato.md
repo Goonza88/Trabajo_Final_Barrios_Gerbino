@@ -20,6 +20,7 @@ export function createData(options = {}) {
 
 - `createData()` devuelve una base de datos nueva, con el catalogo inicial cargado; no comparte estado con otras llamadas
 - `options.ahora` es un reloj que devuelve milisegundos; si no viene, los repositorios usan `Date.now` para los instantes de auditoria
+- `options.path` permite elegir el archivo SQLite; `':memory:'` crea una base temporal en memoria
 - El objeto devuelto tiene siete repositorios (`catalog`, `market`, `config`, `watchlist`, `alerts`, `operations`, `notes`) y una funcion `close()`
 - Todos los metodos son sincronicos; `close()` libera los recursos de la implementacion y, en sqlite, cierra la base de datos
 
