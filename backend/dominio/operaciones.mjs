@@ -5,7 +5,7 @@ import { cantidadPorPorcentaje, pnlOperacion } from '../metricas/operaciones.mjs
 import { activacionPendiente, cierrePorNivel } from '../metricas/niveles.mjs';
 
 // cartera y metricas pasan por el dominio, la interfaz no llama a metricas
-export { metricasOperaciones, resumenCartera } from '../metricas/operaciones.mjs';
+export { metricasOperaciones, pnlOperacion, resumenCartera } from '../metricas/operaciones.mjs';
 
 // lado segun donde queda el take profit, o el stop loss si no hay
 function ladoDe(entrada, tp, sl) {
@@ -118,4 +118,10 @@ export function cancelarOperacion(operacion, ahora) {
     throw new Error('la operacion no esta abierta: ' + operacion.estado);
   }
   return { ...operacion, estado: 'cancelada', cerrada_en: ahora };
+}
+
+// notas de una operacion en cualquier estado - vacias quedan en null
+export function editarNotas(operacion, notas) {
+  if (notas != null && typeof notas !== 'string') throw new Error('notas invalidas');
+  return { ...operacion, notas: notas?.trim() || null };
 }

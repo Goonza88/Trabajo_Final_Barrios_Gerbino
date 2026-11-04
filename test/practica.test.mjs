@@ -2,7 +2,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cancelarOperacion, cerrarOperacion, crearOperacion, previsualizarBorrador, seguirOperaciones } from '../backend/dominio/operaciones.mjs';
+import { cancelarOperacion, cerrarOperacion, crearOperacion, editarNotas, previsualizarBorrador, seguirOperaciones } from '../backend/dominio/operaciones.mjs';
 
 const CONTEXTO = { exchange_id: 'binance', symbol: 'BTCUSDT', saldo: '1000', porcentaje: '10', ahora: 1000 };
 const vela = (open_time, low, high) => ({ open_time, open: low, high, low, close: high });
@@ -93,4 +93,11 @@ test('la vista previa del borrador muestra lado, cantidad y resultado en tp y sl
   assert.deepEqual(previa, { lado: 'compra', cantidad: '1', en_tp: '10', en_sl: '-5', ratio: 2, error: null });
   assert.deepEqual(previsualizarBorrador({ tipo: null, entrada: null, take_profit: '110', stop_loss: null }, { saldo: '1000', porcentaje: '10' }),
     { lado: null, cantidad: null, en_tp: null, en_sl: null, ratio: null, error: 'falta la entrada' });
+});
+
+test('las notas se editan en cualquier estado y vacias quedan en null', () => {
+  const abierta = crearOperacion({ tipo: 'mercado', entrada: '100', take_profit: '110' }, CONTEXTO);
+  assert.equal(editarNotas(abierta, '  entre por el soporte  ').notas, 'entre por el soporte');
+  assert.equal(editarNotas(cerrarOperacion(abierta, '105', 2000), '').notas, null);
+  assert.throws(() => editarNotas(abierta, 5), /notas invalidas/);
 });

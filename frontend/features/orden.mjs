@@ -4,6 +4,7 @@ import { box, cols, gap, rows, text } from '../../backend/terminal/widgets.mjs';
 import { padRight, sanitize } from '../../backend/terminal/ansi.mjs';
 import { previsualizarBorrador, resumenCartera } from '../../backend/dominio/operaciones.mjs';
 import { fmtPrecio } from './watchlist.mjs';
+import { errorOrden, preciosActuales } from '../estado/operaciones.mjs';
 
 export const ANCHO_ORDEN = 30;
 
@@ -34,14 +35,6 @@ function ratio(valor) {
   return [text(valor.toFixed(2), { fg: 'success' }), text(':'), text('1', { fg: 'danger' })];
 }
 
-// ultimo precio de cada simbolo, el del grafico desde su vela
-function preciosActuales(estado) {
-  const precios = Object.fromEntries(Object.values(estado.tickers).map(ticker => [ticker.symbol, ticker.price]));
-  const ultimo = estado.velas.at(-1)?.close;
-  if (ultimo != null) precios[estado.symbol] = ultimo;
-  return precios;
-}
-
 export function vistaOrden(estado, { width, height }) {
   const enfocada = estado.foco === 'orden';
   const marco = { border: 'round', pad: [0, 1], width, height, borderStyle: { fg: enfocada ? 'accent' : 'sec' } };
@@ -51,8 +44,8 @@ export function vistaOrden(estado, { width, height }) {
   const nivel = (precio, fg) => text(fmtPrecio(precio), precio == null ? '' : { fg });
   // con foco la fila del porcentaje se resalta de lado a lado
   const porcentaje = padRight(padRight('porcentaje', ETIQUETA) + estado.porcentaje + '%', width - 4);
-  const aviso = estado.error_orden
-    ? text('err: ' + sanitize(estado.error_orden), { fg: 'danger' })
+  const aviso = errorOrden(estado)
+    ? text('err: ' + sanitize(errorOrden(estado)), { fg: 'danger' })
     : previa.error ? text(sanitize(previa.error), { fg: 'sec' }) : null;
 
   return box(rows([

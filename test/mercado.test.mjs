@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { crearEstado } from '../frontend/estado/mercado.mjs';
+import { errorOrden } from '../frontend/estado/operaciones.mjs';
 
 function deferred() {
   let resolve, reject;
@@ -383,9 +384,9 @@ test('un borrador invalido no crea nada y deja el error hasta descartarlo', () =
   fijarEntrada('mercado', '100');
   confirmarBorrador();
   assert.equal(estado.operaciones.length, 0);
-  assert.match(estado.error_orden, /falta take profit o stop loss/);
+  assert.match(errorOrden(estado), /falta take profit o stop loss/);
   descartarBorrador();
-  assert.equal(estado.error_orden, null);
+  assert.equal(errorOrden(estado), null);
 });
 
 test('cada carga de velas sigue las operaciones del simbolo y los tickers las de los otros', async () => {
@@ -414,4 +415,13 @@ test('cada carga de velas sigue las operaciones del simbolo y los tickers las de
   await cargarTickers();
   assert.deepEqual(estado.operaciones.map(op => [op.symbol, op.estado, op.motivo_cierre]), [['BTCUSDT', 'cerrada', 'tp'], ['ETHUSDT', 'cerrada', 'sl']]);
   assert.deepEqual(estado.eventos.map(evento => evento.tipo), ['creada', 'creada', 'cerrada', 'cerrada']);
+});
+
+test('el error de una orden se ve unos segundos y despues se va solo', () => {
+  const { estado, fijarEntrada, confirmarBorrador } = crearEstado({ cargarVelas: async () => [], ahora: () => 1000 });
+  fijarEntrada('mercado', '100');
+  confirmarBorrador();
+  assert.match(errorOrden(estado, 1000), /falta take profit/);
+  assert.match(errorOrden(estado, 5999), /falta take profit/);
+  assert.equal(errorOrden(estado, 6000), null);
 });

@@ -16,7 +16,7 @@ export function moverMiraMouse(monitor, event, medidas) {
     if (!estado.modoMira) monitor.setMira(null);
     return;
   }
-  if (event.btn !== 0 || estado.modoTabla || (event.phase !== 'down' && event.phase !== 'drag')) return;
+  if (event.btn !== 0 || estado.modoTabla || estado.modoDiario || (event.phase !== 'down' && event.phase !== 'drag')) return;
   const { innerW, gridH, origen } = medidas;
   const ejeW = innerW - anchoPlot(innerW, true);
   const col = event.col - 1 - origen.x;

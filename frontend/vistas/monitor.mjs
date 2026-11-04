@@ -12,6 +12,9 @@ import { tablaVelas } from '../graficos/tabla.mjs';
 import { anchoWatchlist, fmtPrecio, fmtVariacion, vistaWatchlist } from '../features/watchlist.mjs';
 import { ANCHO_ORDEN, hayBorrador, vistaOrden } from '../features/orden.mjs';
 import { vistaCarga } from './carga.mjs';
+import { vistaDiario } from '../features/diario.mjs';
+import { altoNotas, filasNotas, vistaNotas } from '../features/notas.mjs';
+import { errorOrden } from '../estado/operaciones.mjs';
 import { INDICADORES, cabecera, indicadoresVisibles, inferioresVisibles, leyendaIndicadores, medidasInferiores, recuadroInferior } from './indicadores.mjs';
 import { alternarMira, decimalesVisibles, marcarEntrada, marcarNivel, moverMiraMouse, moverMiraTeclado } from './mira.mjs';
 
@@ -29,10 +32,18 @@ const enGrafico = accion => monitor => {
   if (monitor.estado.foco === 'grafico') accion(monitor);
 };
 
+// el grafico se ve si no lo reemplazan la tabla ni el diario
+const conGrafico = estado => !estado.modoTabla && !estado.modoDiario;
+
+// la accion solo corre con el diario abierto y el foco en el
+const enDiario = accion => monitor => {
+  if (monitor.estado.foco === 'grafico' && monitor.estado.modoDiario) accion(monitor);
+};
+
 // la accion solo corre con la mira sobre el grafico
 const conMira = accion => monitor => {
   const { estado } = monitor;
-  if (estado.foco === 'grafico' && estado.mira && !estado.modoTabla) accion(monitor, opcionesActuales(estado));
+  if (estado.foco === 'grafico' && estado.mira && conGrafico(estado)) accion(monitor, opcionesActuales(estado));
 };
 
 // en modo mira las flechas mueven la mira
@@ -82,11 +93,13 @@ function atajos(intervalos = []) {
       { teclas: ['j', 'ArrowDown'], ayuda: 'j - Abajo', accion: oMira('j', monitor => {
         if (monitor.estado.foco === 'watchlist') monitor.moverCursor(1);
         else if (monitor.estado.foco === 'orden') monitor.cambiarPorcentaje('-');
+        else if (monitor.estado.modoDiario) monitor.moverDiario(1);
         else monitor.mover('j');
       }) },
       { teclas: ['k', 'ArrowUp'], ayuda: 'k - Arriba', accion: oMira('k', monitor => {
         if (monitor.estado.foco === 'watchlist') monitor.moverCursor(-1);
         else if (monitor.estado.foco === 'orden') monitor.cambiarPorcentaje('+');
+        else if (monitor.estado.modoDiario) monitor.moverDiario(-1);
         else monitor.mover('k');
       }) },
       { teclas: ['l', 'ArrowRight'], ayuda: 'l - Derecha', accion: oMira('l', enGrafico(monitor => monitor.mover('l', cantidadVelasVisibles(monitor.estado)))) },
@@ -113,8 +126,13 @@ function atajos(intervalos = []) {
     })) },
     { atajos: [
       { teclas: ['z'], ayuda: 'z - Vista de Tabla', accion: monitor => monitor.alternarTabla() },
+      { teclas: ['t'], ayuda: 't - Diario', accion: monitor => monitor.alternarDiario() },
+      // acciones sobre la fila elegida del diario, las anuncia el propio diario
+      { teclas: ['m'], foco: 'grafico', accion: enDiario(monitor => monitor.cerrarSeleccionada()) },
+      { teclas: ['Backspace', 'Delete'], foco: 'grafico', accion: enDiario(monitor => monitor.cancelarSeleccionada()) },
+      { teclas: ['Enter'], foco: 'grafico', accion: enDiario(monitor => monitor.empezarNotas(filasNotas(size().rows))) },
       { teclas: ['x'], ayuda: 'x - Iniciar Mira', accion: enGrafico(monitor => {
-        if (!monitor.estado.modoTabla) alternarMira(monitor, opcionesActuales(monitor.estado));
+        if (conGrafico(monitor.estado)) alternarMira(monitor, opcionesActuales(monitor.estado));
       }) },
       { teclas: ['c'], ayuda: 'c - Descartar Accion', accion: conservandoMira(enGrafico(monitor => monitor.descartarBorrador())) },
     ] },
@@ -192,7 +210,7 @@ export function rangoVentanaVelas(total, cantidad, offset = 0) {
 function medidasPanel(estado, cols, height) {
   const { watchW, chartW } = dimensiones(estado, cols);
   const { inicio, fin, vacias } = rangoVentanaVelas(estado.velas.length, cantidadVelasVisibles(estado, cols), estado.offset);
-  const activos = estado.modoTabla ? [] : inferioresVisibles(estado, inicio, fin);
+  const activos = conGrafico(estado) ? inferioresVisibles(estado, inicio, fin) : [];
   const { alto, entran } = medidasInferiores(activos.length, height);
   const marco = { border: 'round', pad: [0, 1], height: height - alto * entran };
   const { innerW, innerH } = boxSize(marco, chartW);
@@ -230,7 +248,7 @@ function opcionesGrafico(estado, medidas) {
     zoomY: estado.zoomY,
     offsetY: estado.offsetY,
     indicadores: indicadoresVisibles(estado, medidas.inicio, medidas.fin),
-    mira: estado.modoTabla ? null : estado.mira,
+    mira: conGrafico(estado) ? estado.mira : null,
     niveles: nivelesBorrador(estado),
   };
 }
@@ -258,13 +276,25 @@ function tituloGrafico(estado, opciones) {
     + ' | ' + fmtHora(estado.actualizado_en);
 }
 
+// diario en el lugar del grafico con la caja de notas de la operacion elegida debajo
+function panelDiario(estado, marco, width) {
+  const alto = altoNotas(marco.height);
+  const marcoDiario = { ...marco, height: marco.height - alto };
+  const { innerW, innerH } = boxSize(marcoDiario, width);
+  return rows([
+    box(vistaDiario(estado, { width: innerW, height: innerH }), marcoDiario),
+    vistaNotas(estado, { width, height: alto }),
+  ]);
+}
+
 // panel de velas - grafico o tabla segun modo, con espacio para indicadores inferiores
 function panelVelas(estado, medidas) {
   const { chartW, inferiores, alto, innerW } = medidas;
   const opciones = opcionesGrafico(estado, medidas);
   const vis = opciones.velas;
   const marco = { ...medidas.marco, borderStyle: estado.foco === 'grafico' ? { fg: 'accent' } : null };
-  const error = estado.error ?? estado.error_orden;
+  if (estado.modoDiario) return panelDiario(estado, marco, chartW);
+  const error = estado.error ?? errorOrden(estado);
   const titulo = tituloGrafico(estado, opciones);
   const contenido = estado.modoTabla ? tablaVelas(vis) : graficoVelas(opciones);
 
@@ -314,6 +344,11 @@ export function crearMonitor({ salir, sondeoMs = 5000, ...opciones }) {
     subscriptions: [Sub.interval(sondeoMs, 'poll')],
     update: (model, event) => {
       if (event.type === 'key') {
+        // mientras se editan las notas del diario cada tecla escribe
+        if (estado.diario.notas != null) {
+          monitor.teclearNotas(event.key);
+          return estado;
+        }
         // una tecla puede tener un atajo por foco
         const foco = estado.foco;
         atajos(estado.intervalos).flatMap(seccion => seccion.atajos)

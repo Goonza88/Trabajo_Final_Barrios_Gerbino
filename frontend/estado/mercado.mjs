@@ -49,6 +49,7 @@ export function crearEstado({
     offset: 0,
     offsetY: 0,
     modoTabla: false,
+    modoDiario: false,
     cargando: false,
     mira: null,
     modoMira: false,
@@ -226,13 +227,22 @@ export function crearEstado({
     if (!estado.modoMira) estado.mira = null;
   }
 
+  // tabla y diario ocupan el lugar del grafico, uno a la vez
   function alternarTabla() {
     estado.modoTabla = !estado.modoTabla;
+    estado.modoDiario = false;
+  }
+
+  function alternarDiario() {
+    estado.modoDiario = !estado.modoDiario;
+    estado.modoTabla = false;
   }
 
   // al volver a entrar a la vista arranca en el grafico
   function reiniciarVista() {
+    estado.error_orden = null;
     estado.modoTabla = false;
+    estado.modoDiario = false;
     estado.modoMira = false;
     estado.mira = null;
   }
@@ -275,6 +285,12 @@ export function crearEstado({
     descartarBorrador: practica.descartarBorrador,
     confirmarBorrador: practica.confirmarBorrador,
     cambiarPorcentaje: practica.cambiarPorcentaje,
+    alternarDiario,
+    moverDiario: practica.moverDiario,
+    cerrarSeleccionada: practica.cerrarSeleccionada,
+    cancelarSeleccionada: practica.cancelarSeleccionada,
+    empezarNotas: practica.empezarNotas,
+    teclearNotas: practica.teclearNotas,
     reiniciarVista,
     mover,
     cancelar

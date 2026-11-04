@@ -402,7 +402,7 @@ test('el monitor arma la ayuda por secciones y la watchlist calcula el ancho par
     { lineas: ['y - Alejar Horizontal', 'u - Alejar Vertical', 'i - Acercar Vertical', 'o - Acercar Horizontal'], resumen: 'y-o - Zoom' },
     { lineas: ['q - Take Profit', 'w - Entrada Limite', 'e - Stop Loss', 'r - Entrada Mercado'], resumen: 'q-r - Operacion' },
     { lineas: ['a - Intervalo 1m', 's - Intervalo 5m', 'd - Intervalo 1h', 'f - Intervalo 4h', 'g - Intervalo 1d'], resumen: 'a-g - Intervalos' },
-    { lineas: ['z - Vista de Tabla', 'x - Iniciar Mira', 'c - Descartar Accion'], resumen: undefined },
+    { lineas: ['z - Vista de Tabla', 't - Diario', 'x - Iniciar Mira', 'c - Descartar Accion'], resumen: undefined },
     { lineas: ['1 - Media Simple', '2 - Media Exponencial', '3 - RSI', '4 - Volumen', '5 - Bandas de Bollinger'], resumen: '1-5 - Indicadores' },
     { lineas: ['Esc - Volver'], resumen: undefined },
   ]);
