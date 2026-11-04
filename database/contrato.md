@@ -117,7 +117,7 @@ Salvo indicacion contraria, los nombres de los campos son los de las columnas de
 | `saveConfig(config)` | objeto `config` (sin `id`) | la fila guardada |
 
 - Una fila con `id = 'local'`; `readConfig` es `null` hasta el primer `saveConfig`, que reemplaza la fila y pone `actualizado_en` con el reloj
-- `intervalo_por_defecto` sale de `INTERVALS`; `saldo_inicial` es decimal; `fuente` de `CONFIG_SOURCES`; `sondeo_ms` es entero positivo
+- `intervalo_por_defecto` sale de `INTERVALS`; `saldo_inicial` es decimal obligatorio; `fuente` de `CONFIG_SOURCES`; `sondeo_ms` es entero positivo
 - El saldo actual no se persiste; la app lo calcula con el PnL de las operaciones cerradas
 - `exchange_id` y `simbolo_por_defecto` van juntos; el simbolo debe tener habilitado `intervalo_por_defecto`
 - `fuente: 'remoto'` exige `fuente_url`; `'local'` no la admite; el campo que no corresponde queda en `null`
@@ -207,6 +207,8 @@ Todos son `Error` con mensaje en castellano sin acentos; el texto es parte del c
 | `entero invalido en <campo>: <valor>` | un entero o instante no es entero seguro (o es menor al minimo) |
 | `booleano invalido en <campo>: <valor>` | un booleano no es `0` ni `1` |
 | `<campo> invalido: <valor> (se espera uno de ...)` | un valor fuera de un vocabulario |
+| `estado invalido: <valor> (se espera uno de pendiente, abierta)` | estado inicial no permitido en `registerOperation` |
+| `motivo_cierre invalido: <valor> (se espera uno de tp, sl, manual)` | motivo de cierre fuera de `CLOSE_REASONS` |
 | `texto invalido en <campo>: <valor>` | un texto obligatorio vacio o de otro tipo |
 | `parametro requerido: <campo>` | falta un argumento requerido |
 | `se espera un objeto` | un metodo que recibe un objeto recibe `null`, una lista u otro tipo |

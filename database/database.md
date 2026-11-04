@@ -9,7 +9,7 @@ El motor completo viene dentro de Node a traves del modulo nativo `node:sqlite`,
 La base es un unico archivo (`data/app.db`, que no se versiona y esta en el `.gitignore`) que se crea solo la primera vez. El acceso se implementa en `backend/datos` y sigue este flujo:
 
 1. Se abre la conexion y se aplican `PRAGMA`: `foreign_keys = ON`, `journal_mode = WAL`, `busy_timeout` y `synchronous = NORMAL` para que se respeten las claves foraneas, leer mientras se escribe, esperar si el archivo esta ocupado, y equilibrar velocidad y seguridad con WAL.
-2. Se ejecutan las migraciones de `backend/datos/migraciones/`, que aplican o actualizan el DDL de [`schema.sql`](schema.sql) y cargan el catalogo inicial (Binance con `BTCUSDT` y `ETHUSDT`).
+2. Para una base nueva se ejecuta la unica migracion inicial de `backend/datos/migraciones/`. Su SQL fijo crea el esquema y carga el catalogo inicial (Binance con `BTCUSDT` y `ETHUSDT`); [`schema.sql`](schema.sql) es la referencia legible del mismo esquema.
 3. El resto de la app accede a datos solo a traves de los repositorios de `backend/datos`, y nunca escribe SQL por su cuenta. La interfaz no consulta la base de datos, muestra el estado que le entrega el dominio. El contrato esta en [`contrato.md`](contrato.md).
 4. Para traer informacion del mercado, usamos `INSERT ... ON CONFLICT DO UPDATE` dentro de una transaccion, para que volver a consultar el mismo periodo no duplique filas.
 
@@ -173,7 +173,7 @@ Ademas, `timeframe` usa el mismo vocabulario que `interval` en `simbolo_interval
 
 ### operacion
 
-Compra o venta del usuario, permite derivar las metricas.
+Operacion de practica de compra o venta; permite derivar las metricas sin conectarse a una API.
 
 | Clave | Campo | Tipo | Condicion | Descripcion |
 | ----- | ----- | ---- | --------- | ----------- |
@@ -184,14 +184,18 @@ Compra o venta del usuario, permite derivar las metricas.
 |  | `tipo` | TEXT | obligatorio, `mercado` o `limite` | tipo de orden |
 |  | `cantidad` | TEXT | obligatorio, decimal con hasta 8 decimales | como texto para no perder precision |
 |  | `precio_entrada` | TEXT | obligatorio, decimal con hasta 8 decimales | precio de entrada |
-|  | `precio_salida` | TEXT | opcional, decimal con hasta 8 decimales | null mientras esta abierta |
+|  | `take_profit` | TEXT | opcional, decimal con hasta 8 decimales | precio que cierra la operacion con ganancia |
+|  | `stop_loss` | TEXT | opcional, decimal con hasta 8 decimales | precio que cierra la operacion con perdida limitada |
+|  | `precio_salida` | TEXT | opcional, decimal con hasta 8 decimales | null mientras no esta cerrada |
 |  | `fees` | TEXT | obligatorio, decimal con hasta 8 decimales | comisiones en la moneda de cotizacion |
-|  | `abierta_en` | INTEGER | obligatorio | epoch en ms UTC |
+|  | `creada_en` | INTEGER | obligatorio | epoch en ms UTC de registro |
+|  | `abierta_en` | INTEGER | null en pendiente; obligatorio en abierta y cerrada; puede ser null en cancelada | epoch en ms UTC de activacion |
 |  | `cerrada_en` | INTEGER | opcional | epoch en ms UTC |
-|  | `estado` | TEXT | obligatorio, `abierta`, `cerrada` o `cancelada` | estado de la operacion |
+|  | `motivo_cierre` | TEXT | obligatorio en cerrada (`tp`, `sl`, `manual`); null en otro estado | causa del cierre |
+|  | `estado` | TEXT | obligatorio, `pendiente`, `abierta`, `cerrada` o `cancelada` | estado de la operacion |
 |  | `notas` | TEXT | opcional | notas del operador |
 
-Si `estado` es `cerrada`, la base exige que `precio_salida` y `cerrada_en` no sean nulos.
+`pendiente` representa una orden limite que aun no llego al precio de entrada; por eso `abierta_en` queda en null hasta activarla. Si se cancela estando pendiente, `abierta_en` puede seguir en null. Si `estado` es `cerrada`, la base exige que `precio_salida`, `cerrada_en` y `motivo_cierre` tengan valor. La coherencia entre `precio_entrada`, `take_profit` y `stop_loss` se valida en la app.
 
 ### operacion_tag
 
@@ -231,6 +235,7 @@ La configuracion de la terminal, segun lo que el usuario modifico. Es una sola f
 | ----- | ----- | ---- | --------- | ----------- |
 | primaria | `id` | TEXT | obligatorio, siempre `local` | fila unica |
 |  | `intervalo_por_defecto` | TEXT | obligatorio, uno de `1m`, `5m`, `1h`, `4h`, `1d` | intervalo con el que abre la app |
+|  | `saldo_inicial` | TEXT | obligatorio, decimal con hasta 8 decimales, `CHECK` de formato | capital inicial de la cartera de practica |
 | foranea | `exchange_id` | TEXT | opcional, foranea a `simbolo` | exchange del simbolo por defecto |
 | foranea | `simbolo_por_defecto` | TEXT | opcional, foranea a `simbolo` | simbolo con el que abre la app |
 |  | `fuente` | TEXT | obligatorio, `local` o `remoto` | origen del historial |
@@ -240,7 +245,7 @@ La configuracion de la terminal, segun lo que el usuario modifico. Es una sola f
 
 Tres condiciones evitan guardar una configuracion que el sistema no podria usar: el `intervalo_por_defecto` debe ser uno de los cinco intervalos para evitar que la app arranque en un intervalo para el que `kline` no puede guardar velas, y `fuente` va junto a `fuente_url`, ya que `remoto` sin url no podria bajar nada, y `local` con url la ignoraria, y `exchange_id` va junto a `simbolo_por_defecto`, porque el simbolo sin su exchange no existe.
 
-Que el simbolo por defecto tenga habilitado ese intervalo es un cruce entre `config` y `simbolo_intervalo`, lo valida la app al guardar la configuracion.
+El saldo actual no se guarda; la app lo calcula sumando el PnL de las operaciones cerradas. Que el simbolo por defecto tenga habilitado ese intervalo es un cruce entre `config` y `simbolo_intervalo`, lo valida la app al guardar la configuracion.
 
 ## Indices
 
@@ -248,5 +253,5 @@ Ademas de las claves primarias, que ya cubren las busquedas de velas y tickers p
 
 - `idx_alerta_activa` sobre `alerta(exchange_id, symbol, activa)`, para evaluar solo las alertas encendidas de un simbolo
 - `idx_operacion_estado` sobre `operacion(exchange_id, symbol, estado)`, para el diario y las metricas por simbolo
-- `idx_operacion_fecha` sobre `operacion(abierta_en)`, para el orden cronologico
+- `idx_operacion_fecha` sobre `operacion(creada_en)`, para ordenar tambien las operaciones pendientes
 - `idx_nota_symbol` sobre `nota(exchange_id, symbol)`, para filtrar notas por simbolo

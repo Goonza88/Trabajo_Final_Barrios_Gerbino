@@ -1,10 +1,9 @@
 // implementacion SQLite de backend/datos segun database/contrato.md.
 import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { seedCatalog, up as applyInitialMigration } from '../migraciones/001-inicial.mjs';
-import { up as migrateDecimalChecks } from '../migraciones/002-decimales-sin-punto-final.mjs';
+import { up as applyInitialMigration } from '../migraciones/001-inicial.mjs';
 import {
   INTERVALS, ALERT_OPERATORS, OPERATION_SIDES,
   ORDER_TYPES, OPERATION_STATES, CLOSE_REASONS, CONFIG_SOURCES,
@@ -17,10 +16,8 @@ import {
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT = path.resolve(HERE, '../../..');
-const SCHEMA = path.join(PROJECT, 'database', 'schema.sql');
 const MIGRATIONS = [
   { id: '001-inicial', up: applyInitialMigration },
-  { id: '002-decimales-sin-punto-final', up: migrateDecimalChecks, foreignKeysOff: true },
 ];
 
 function rows(stmt, ...args) {
@@ -137,14 +134,14 @@ function initializeDatabase(db, clock) {
   ).all();
   db.exec('CREATE TABLE IF NOT EXISTS schema_migration (id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)');
   if (existingTables.length === 0) {
-    // Las bases nuevas nacen con el esquema actual y registran el historial completo.
-    const schema = readFileSync(SCHEMA, 'utf8').replace(/^\s*PRAGMA\s+[^;]+;\s*$/gim, '');
-    db.exec(schema);
-    seedCatalog(db);
-    const markApplied = db.prepare('INSERT INTO schema_migration(id,applied_at) VALUES (?,?)');
-    for (const migration of MIGRATIONS) {
-      markApplied.run(migration.id, now(clock, 'applied_at'));
-    }
+    const migration = MIGRATIONS[0];
+    transaction(db, () => {
+      migration.up(db);
+      db.prepare('INSERT INTO schema_migration(id,applied_at) VALUES (?,?)').run(
+        migration.id,
+        now(clock, 'applied_at')
+      );
+    });
   } else {
     for (const migration of MIGRATIONS) {
       const applied = db.prepare('SELECT 1 AS ok FROM schema_migration WHERE id=?').get(migration.id);

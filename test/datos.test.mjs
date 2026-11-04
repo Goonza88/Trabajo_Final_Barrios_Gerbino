@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createData } from '../backend/datos/sqlite/index.mjs';
+import { up as applyInitialMigration } from '../backend/datos/migraciones/001-inicial.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const schema = readFileSync(path.join(root, 'database', 'schema.sql'), 'utf8');
@@ -135,19 +136,18 @@ test('alertas: alta, edicion y disparo', () => {
       symbol: 'BTCUSDT',
       tipo: 'precio',
       campo: 'price',
-      operador: '>',
+      operador: 'cruza_arriba',
       valor: '100',
       timeframe: '1m'
     });
 
     assert.equal(alerta.activa, 1);
-    const editada = datos.alerts.updateAlert(alerta.id, { valor: '120', activa: 0 });
-    assert.equal(editada.valor, '120');
-    assert.equal(editada.activa, 0);
-
     const disparada = datos.alerts.markTriggered(alerta.id);
     assert.equal(disparada.disparada, 1);
     assert.equal(disparada.disparos, 1);
+
+    const editada = datos.alerts.updateAlert(alerta.id, { activa: 0 });
+    assert.equal(editada.activa, 0);
     assert.equal(datos.alerts.listAlerts({ activas: 0 }).length, 1);
   });
 });
@@ -188,6 +188,107 @@ test('operaciones: alta, tags, cierre y cancelacion', () => {
     assert.equal(datos.operations.cancelOperation(paraCancelar.id).estado, 'cancelada');
     assert.equal(datos.operations.listOperations().length, 2);
     assert.deepEqual(datos.operations.listOperations()[0].tags, ['ruptura']);
+  });
+});
+
+test('operaciones de practica: pendiente, activacion y motivos de cierre', () => {
+  let instante = 1000;
+  const datos = createData({ path: ':memory:', ahora: () => instante });
+
+  function operacion(cambios = {}) {
+    return datos.operations.registerOperation({
+      exchange_id: 'binance',
+      symbol: 'BTCUSDT',
+      lado: 'compra',
+      tipo: 'limite',
+      cantidad: '1',
+      precio_entrada: '100',
+      ...cambios
+    });
+  }
+
+  try {
+    const pendiente = operacion({
+      estado: 'pendiente',
+      take_profit: '120',
+      stop_loss: '90',
+      tags: ['practica']
+    });
+    assert.equal(pendiente.estado, 'pendiente');
+    assert.equal(pendiente.creada_en, 1000);
+    assert.equal(pendiente.abierta_en, null);
+    assert.equal(pendiente.take_profit, '120');
+    assert.equal(pendiente.stop_loss, '90');
+
+    instante = 2000;
+    const abierta = datos.operations.activateOperation(pendiente.id);
+    assert.equal(abierta.estado, 'abierta');
+    assert.equal(abierta.abierta_en, 2000);
+    assert.deepEqual(abierta.tags, ['practica']);
+    assert.throws(
+      () => datos.operations.activateOperation(abierta.id),
+      { message: 'la operacion no esta pendiente: abierta' }
+    );
+
+    assert.throws(
+      () => datos.operations.closeOperation(abierta.id, { precio_salida: '120' }),
+      { message: 'parametro requerido: motivo_cierre' }
+    );
+    instante = 3000;
+    const cerrada = datos.operations.closeOperation(abierta.id, {
+      precio_salida: '120',
+      motivo_cierre: 'tp'
+    });
+    assert.equal(cerrada.estado, 'cerrada');
+    assert.equal(cerrada.motivo_cierre, 'tp');
+
+    for (const motivo_cierre of ['sl', 'manual']) {
+      const abiertaDirecta = operacion({ tipo: 'mercado' });
+      const cerradaDirecta = datos.operations.closeOperation(abiertaDirecta.id, {
+        precio_salida: '90',
+        motivo_cierre
+      });
+      assert.equal(cerradaDirecta.motivo_cierre, motivo_cierre);
+    }
+
+    const paraCancelar = operacion({ estado: 'pendiente' });
+    const cancelada = datos.operations.cancelOperation(paraCancelar.id);
+    assert.equal(cancelada.estado, 'cancelada');
+    assert.equal(cancelada.abierta_en, null);
+    assert.equal(cancelada.motivo_cierre, null);
+  } finally {
+    datos.close();
+  }
+});
+
+test('operaciones de practica: valida niveles y saldo inicial', () => {
+  conDatos(datos => {
+    const operacion = {
+      exchange_id: 'binance',
+      symbol: 'BTCUSDT',
+      lado: 'compra',
+      tipo: 'limite',
+      cantidad: '1',
+      precio_entrada: '100'
+    };
+
+    assert.throws(
+      () => datos.operations.registerOperation({ ...operacion, take_profit: '1.' }),
+      /decimal invalido en take_profit: 1\./
+    );
+    assert.throws(
+      () => datos.operations.registerOperation({ ...operacion, stop_loss: '1.' }),
+      /decimal invalido en stop_loss: 1\./
+    );
+    assert.throws(
+      () => datos.config.saveConfig({
+        intervalo_por_defecto: '1m',
+        saldo_inicial: '1.',
+        fuente: 'local',
+        sondeo_ms: 5000
+      }),
+      /decimal invalido en saldo_inicial: 1\./
+    );
   });
 });
 
@@ -435,14 +536,16 @@ test('errores definidos en el contrato', () => {
   });
 });
 
-test('createData: aplica el esquema vigente', () => {
+test('la migracion inicial crea el mismo esquema que schema.sql', () => {
   const directory = mkdtempSync(path.join(tmpdir(), 'datos-sqlite-'));
   const filename = path.join(directory, 'nueva.db');
   const expected = new DatabaseSync(':memory:');
+  const actual = new DatabaseSync(':memory:');
   const datos = createData({ path: filename, ahora: () => 1000 });
-  const actual = new DatabaseSync(filename);
 
   expected.exec(schema.replace(/^\s*PRAGMA\s+[^;]+;\s*$/gim, ''));
+  applyInitialMigration(actual);
+  const created = new DatabaseSync(filename);
 
   function schemaOf(db) {
     return db.prepare(`
@@ -460,8 +563,10 @@ test('createData: aplica el esquema vigente', () => {
 
   try {
     assert.deepEqual(schemaOf(actual), schemaOf(expected));
-    assert.deepEqual(actual.prepare('PRAGMA foreign_key_check').all(), []);
+    assert.deepEqual(schemaOf(created), schemaOf(expected));
+    assert.deepEqual(created.prepare('PRAGMA foreign_key_check').all(), []);
   } finally {
+    created.close();
     actual.close();
     expected.close();
     datos.close();
