@@ -3,6 +3,7 @@
 import { cargarVelas as pedirVelas, cargarTickers as pedirTickers } from '../../backend/dominio/mercado.mjs';
 import { calcularIndicadores, calcularVariacion } from '../../backend/dominio/indicadores.mjs';
 import { crearPractica } from './operaciones.mjs';
+import { crearAlertas } from './alertas.mjs';
 
 // limites del zoom horizontal, en velas visibles
 const ZOOM_X = Object.freeze({ min: 20, max: 160, paso: 5 });
@@ -57,6 +58,7 @@ export function crearEstado({
   };
 
   const practica = crearPractica(estado, { saldoInicial, porcentaje, ahora });
+  const alertas = crearAlertas(estado, { ahora });
 
   // carga en segundo plano - nueva cancela anterior y una respuesta vieja no pisa nueva
   function crearCarga(pedir, aplicar, fallar) {
@@ -115,6 +117,7 @@ export function crearEstado({
       estado.actualizado_en = Date.now();
       estado.error = null;
       practica.seguir(estado.symbol, norm, norm.at(-1)?.close ?? null);
+      alertas.seguir(estado.symbol, norm, norm.at(-1)?.close ?? null);
     },
     e => { estado.error = e.message; }
   );
@@ -137,7 +140,9 @@ export function crearEstado({
       estado.variaciones = variaciones;
       // las de otros simbolos siguen con el precio del ticker
       for (const ticker of Object.values(mapa)) {
-        if (ticker.symbol !== estado.symbol) practica.seguir(ticker.symbol, [], ticker.price);
+        if (ticker.symbol === estado.symbol) continue;
+        practica.seguir(ticker.symbol, [], ticker.price);
+        alertas.seguir(ticker.symbol, [], ticker.price);
       }
       estado.tickers_error = null;
       estado.tickers_actualizado_en = Date.now();
@@ -189,7 +194,7 @@ export function crearEstado({
   }
 
   function setFoco(foco) {
-    if (foco === 'watchlist' || foco === 'grafico' || foco === 'orden') estado.foco = foco;
+    if (['watchlist', 'grafico', 'orden', 'aviso'].includes(foco)) estado.foco = foco;
   }
 
   // pasa al siguiente de los focos disponibles
@@ -291,6 +296,9 @@ export function crearEstado({
     cancelarSeleccionada: practica.cancelarSeleccionada,
     empezarNotas: practica.empezarNotas,
     teclearNotas: practica.teclearNotas,
+    agregarAlerta: alertas.agregarAlerta,
+    descartarAviso: alertas.descartarAviso,
+    borrarAlertaSeleccionada: alertas.borrarAlertaSeleccionada,
     reiniciarVista,
     mover,
     cancelar

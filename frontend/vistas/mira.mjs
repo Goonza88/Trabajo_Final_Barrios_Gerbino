@@ -68,3 +68,9 @@ export function marcarEntrada(monitor, opciones) {
   const precio = precioMira(opciones);
   if (precio) monitor.fijarEntrada('limite', precio);
 }
+
+// pone una alerta en el precio bajo la mira
+export function marcarAlerta(monitor, opciones) {
+  const precio = precioMira(opciones);
+  if (precio) monitor.agregarAlerta(precio);
+}

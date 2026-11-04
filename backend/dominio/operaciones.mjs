@@ -70,7 +70,7 @@ export function previsualizarBorrador(borrador, { saldo, porcentaje }) {
 }
 
 // velas que cuentan desde un instante y el precio actual como una vela sin rango
-function tramosDesde(velas, desde, precio, ahora) {
+export function tramosDesde(velas, desde, precio, ahora) {
   const tramos = velas.filter(vela => vela.open_time >= desde);
   return precio == null ? tramos : [...tramos, { open_time: ahora, high: precio, low: precio }];
 }

@@ -16,7 +16,8 @@ import { vistaDiario } from '../features/diario.mjs';
 import { altoNotas, filasNotas, vistaNotas } from '../features/notas.mjs';
 import { errorOrden } from '../estado/operaciones.mjs';
 import { INDICADORES, cabecera, indicadoresVisibles, inferioresVisibles, leyendaIndicadores, medidasInferiores, recuadroInferior } from './indicadores.mjs';
-import { alternarMira, decimalesVisibles, marcarEntrada, marcarNivel, moverMiraMouse, moverMiraTeclado } from './mira.mjs';
+import { ALTO_AVISO, vistaAviso } from '../features/avisos.mjs';
+import { alternarMira, decimalesVisibles, marcarAlerta, marcarEntrada, marcarNivel, moverMiraMouse, moverMiraTeclado } from './mira.mjs';
 
 // ATAJOS ==========================================================================================
 
@@ -70,7 +71,12 @@ const conservandoMira = accion => monitor => {
 
 // focos por los que pasa Tab - la caja de la orden solo mientras se ve
 function focosDisponibles(estado) {
-  return dimensiones(estado, size().cols).ordenW ? ['watchlist', 'grafico', 'orden'] : ['watchlist', 'grafico'];
+  return [
+    'watchlist',
+    ...(estado.avisos.length ? ['aviso'] : []),
+    'grafico',
+    ...(dimensiones(estado, size().cols).ordenW ? ['orden'] : []),
+  ];
 }
 
 // rango de teclas para la ayuda resumida de una seccion, como 'h-l'
@@ -129,12 +135,17 @@ function atajos(intervalos = []) {
       { teclas: ['t'], ayuda: 't - Diario', accion: monitor => monitor.alternarDiario() },
       // acciones sobre la fila elegida del diario, las anuncia el propio diario
       { teclas: ['m'], foco: 'grafico', accion: enDiario(monitor => monitor.cerrarSeleccionada()) },
-      { teclas: ['Backspace', 'Delete'], foco: 'grafico', accion: enDiario(monitor => monitor.cancelarSeleccionada()) },
+      { teclas: ['Backspace', 'Delete'], foco: 'grafico', accion: enDiario(monitor => {
+        monitor.cancelarSeleccionada();
+        monitor.borrarAlertaSeleccionada();
+      }) },
       { teclas: ['Enter'], foco: 'grafico', accion: enDiario(monitor => monitor.empezarNotas(filasNotas(size().rows))) },
       { teclas: ['x'], ayuda: 'x - Iniciar Mira', accion: enGrafico(monitor => {
         if (conGrafico(monitor.estado)) alternarMira(monitor, opcionesActuales(monitor.estado));
       }) },
       { teclas: ['c'], ayuda: 'c - Descartar Accion', accion: conservandoMira(enGrafico(monitor => monitor.descartarBorrador())) },
+      { teclas: ['v'], ayuda: 'v - Alerta', accion: conMira(marcarAlerta) },
+      { teclas: ['Enter'], foco: 'aviso', accion: monitor => monitor.descartarAviso() },
     ] },
     { resumen: rango(INDICADORES.map(({ tecla }) => tecla)) + ' - Indicadores', atajos: INDICADORES.map(({ tecla, nombre, titulo }) => ({
       teclas: [tecla],
@@ -211,11 +222,11 @@ function medidasPanel(estado, cols, height) {
   const { watchW, chartW } = dimensiones(estado, cols);
   const { inicio, fin, vacias } = rangoVentanaVelas(estado.velas.length, cantidadVelasVisibles(estado, cols), estado.offset);
   const activos = conGrafico(estado) ? inferioresVisibles(estado, inicio, fin) : [];
-  const { alto, entran } = medidasInferiores(activos.length, height);
-  const marco = { border: 'round', pad: [0, 1], height: height - alto * entran };
+  const aviso = estado.avisos.length ? ALTO_AVISO : 0; // avisos quita alto al panel
+  const { alto, entran } = medidasInferiores(activos.length, height - aviso);
+  const marco = { border: 'round', pad: [0, 1], height: height - aviso - alto * entran };
   const { innerW, innerH } = boxSize(marco, chartW);
-  // grilla comienza tras el separador, borde y padding, bajo el borde y cabecera
-  const origen = { x: watchW + 3, y: 3 };
+  const origen = { x: watchW + 3, y: aviso + 3 }; // despues de panel, separadores, bordes y titulos
   return { chartW, inicio, fin, vacias, inferiores: activos.slice(0, entran), alto, marco, innerW, gridH: Math.max(2, innerH - 3), origen };
 }
 
@@ -230,7 +241,9 @@ const lineasOrden = ({ entrada, take_profit, stop_loss }) => [
 function nivelesBorrador(estado) {
   const vivas = estado.operaciones.filter(operacion =>
     operacion.symbol === estado.symbol && (operacion.estado === 'abierta' || operacion.estado === 'pendiente'));
+  const alertas = estado.alertas.filter(alerta => alerta.symbol === estado.symbol && alerta.activa);
   return [
+    ...alertas.map(alerta => ({ precio: alerta.valor, style: { fg: 'sec' } })),
     ...vivas.flatMap(operacion => lineasOrden({ ...operacion, entrada: operacion.precio_entrada })),
     ...lineasOrden(estado.borrador),
   ];
@@ -308,6 +321,12 @@ function panelVelas(estado, medidas) {
   return rows([grafico, ...inferiores.map(inferior => recuadroInferior(vis, { ...inferior, vacias: opciones.vacias }, chartW, alto))]);
 }
 
+// panel con caja de avisos encima mientras haya alertas
+function conAviso(estado, medidas) {
+  const panel = panelVelas(estado, medidas);
+  return estado.avisos.length ? rows([vistaAviso(estado, { width: medidas.chartW }), panel]) : panel;
+}
+
 export function vistaMonitor(estado) {
   const { cols, rows: height } = size();
   const { watchW, ordenW } = dimensiones(estado, cols);
@@ -317,7 +336,7 @@ export function vistaMonitor(estado) {
     gap: 1,
     children: [
       vistaWatchlist(estado, { width: watchW, height, ayuda: seccionesAyuda(estado.intervalos) }),
-      panelVelas(estado, medidasPanel(estado, cols, height)),
+      conAviso(estado, medidasPanel(estado, cols, height)),
       ordenW ? vistaOrden(estado, { width: ordenW, height }) : null,
     ].filter(Boolean)
   });

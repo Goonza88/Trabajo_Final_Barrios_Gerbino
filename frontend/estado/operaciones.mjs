@@ -122,8 +122,9 @@ export function crearPractica(estado, { saldoInicial = '100', porcentaje = '10',
     }
   }
 
+  // diario lista las operaciones y despues las alertas
   function moverDiario(delta) {
-    const total = estado.operaciones.length;
+    const total = estado.operaciones.length + estado.alertas.length;
     estado.diario.cursor = Math.max(0, Math.min(total - 1, estado.diario.cursor + delta));
   }
 

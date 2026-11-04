@@ -332,3 +332,46 @@ test('t abre el diario en lugar del grafico con metricas, filas vivas primero y 
   assert.equal(estado.modoDiario, false, 'la tabla cierra el diario');
   assert.equal(estado.modoTabla, true);
 });
+
+test('v pone una alerta en la mira, al cruzarla aparece el aviso arriba y se descarta con foco y Enter', async () => {
+  let reloj = 1000;
+  const base = Array.from({ length: 40 }, (_, i) => ({
+    open_time: i * 60000, open: String(100 + i), high: String(103 + i), low: String(98 + i), close: String(101 + i), volume: '1',
+  }));
+  let velas = base;
+  const app = crearMonitor({ simbolos: ['BTCUSDT', 'ETHUSDT'], salir: () => {}, ahora: () => reloj, cargarVelas: async () => velas, cargarTickers: async () => [] });
+  const estado = app.update(null, tecla('sin-atajo'));
+  estado.velas = base;
+  const pantalla = () => flatten(app.view(estado), 120, 30).map(linea => sanitize(linea.content));
+
+  app.update(estado, tecla('x'));
+  for (let i = 0; i < 3; i++) app.update(estado, tecla('k'));
+  app.update(estado, tecla('v'));
+  assert.equal(estado.alertas.length, 1);
+  const [alerta] = estado.alertas;
+  assert.equal(alerta.operador, 'cruza_arriba', 'arriba del ultimo precio');
+  assert.ok(pantalla().some(linea => new RegExp('│ ' + alerta.valor + ' +┄').test(linea)), 'la alerta deja su linea con el precio en el eje');
+  app.update(estado, tecla('x'));
+
+  reloj = 50 * 60000;
+  velas = [...base, { open_time: 45 * 60000, open: '140', high: '200', low: '139', close: '150', volume: '1' }];
+  await app.update(estado, { type: 'sub:tick', tag: 'poll' });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(estado.alertas[0].activa, 0, 'se dispara y queda apagada');
+  assert.equal(estado.avisos.length, 1);
+  assert.ok(pantalla().some(linea => linea.includes('alerta BTCUSDT cruzo arriba de ' + alerta.valor)), 'el aviso aparece arriba');
+
+  app.update(estado, tecla('Tab'));
+  app.update(estado, tecla('Tab'));
+  assert.equal(estado.foco, 'aviso', 'Tab pasa por el aviso');
+  app.update(estado, tecla('Enter'));
+  assert.equal(estado.avisos.length, 0);
+  assert.equal(estado.foco, 'grafico', 'sin avisos el foco vuelve al grafico');
+  assert.ok(!pantalla().some(linea => linea.includes('cruzo arriba')));
+
+  app.update(estado, tecla('t'));
+  assert.ok(pantalla().some(linea => linea.includes('alertas')), 'el diario tiene su seccion de alertas');
+  assert.ok(pantalla().some(linea => linea.includes('disparada')));
+  app.update(estado, tecla('Backspace'));
+  assert.equal(estado.alertas.length, 0, 'Backspace borra la alerta elegida');
+});

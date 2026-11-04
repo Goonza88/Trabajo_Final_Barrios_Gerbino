@@ -4,6 +4,7 @@ import { cols, gap, rows, table, text } from '../../backend/terminal/widgets.mjs
 import { sanitize } from '../../backend/terminal/ansi.mjs';
 import { metricasOperaciones, pnlOperacion } from '../../backend/dominio/operaciones.mjs';
 import { errorOrden, filasDiario, preciosActuales } from '../estado/operaciones.mjs';
+import { alertasDiario } from '../estado/alertas.mjs';
 import { fmtPrecio } from './watchlist.mjs';
 
 const ENCABEZADOS = ['#', 'fecha', 'simbolo', 'lado', 'tipo', 'estado', 'entrada', 'tp', 'sl', 'salida', 'pnl'];
@@ -12,6 +13,11 @@ const LADOS = { compra: 'long', venta: 'short' };
 // colores del lado y de los cierres
 const VERDE = { fg: 'success' };
 const ROJO = { fg: 'danger' };
+
+const ENCABEZADOS_ALERTAS = ['#', 'simbolo', 'nivel', 'cruce', 'estado', 'fecha'];
+
+// filas de alertas
+const MAX_ALERTAS = 4;
 
 // columnas que se sacan primero cuando la tabla no entra
 const PRESCINDIBLES = ['tp', 'sl', 'tipo', 'salida', 'fecha', 'simbolo'];
@@ -85,19 +91,42 @@ function columnasQueEntran(filas, width) {
   return { headers: columnas.map(i => ENCABEZADOS[i]), rows: filas.map(fila => columnas.map(i => fila[i])) };
 }
 
+function filaAlerta(alerta) {
+  const arriba = alerta.operador === 'cruza_arriba';
+  return [
+    String(alerta.id),
+    alerta.symbol,
+    fmtPrecio(alerta.valor),
+    { text: arriba ? 'arriba' : 'abajo', style: arriba ? VERDE : ROJO },
+    alerta.activa ? 'activa' : { text: 'disparada', style: { fg: 'accent' } },
+    fecha(alerta.ultimo_disparo ?? alerta.created_at),
+  ];
+}
+
+// ventana de filas que entra, siguiendo a la elegida
+function ventana(total, elegida, lugar) {
+  const inicio = Math.max(0, Math.min(elegida - lugar + 1, total - lugar));
+  return { inicio, fin: inicio + lugar };
+}
+
 export function vistaDiario(estado, { width, height }) {
   const filas = filasDiario(estado);
+  const alertas = alertasDiario(estado);
   const precios = preciosActuales(estado);
   const { cursor, notas } = estado.diario;
-  // ventana de filas que entran despues de la actual
-  const maxFilas = Math.max(1, height - FIJAS);
-  const inicio = Math.max(0, Math.min(cursor - maxFilas + 1, filas.length - maxFilas));
-  const visibles = filas.slice(inicio, inicio + maxFilas);
+  // eleccion recorre operaciones y despues alertas
+  const enAlertas = cursor >= filas.length;
+  const filasAlertas = Math.min(alertas.length, MAX_ALERTAS);
+  const seccionAlertas = alertas.length ? 4 + filasAlertas : 0;
+  const maxFilas = Math.max(1, height - FIJAS - seccionAlertas);
+  const tramo = ventana(filas.length, enAlertas ? filas.length - 1 : cursor, maxFilas);
+  const visibles = filas.slice(tramo.inicio, tramo.fin);
+  const tramoAlertas = ventana(alertas.length, enAlertas ? cursor - filas.length : 0, filasAlertas);
   const pie = notas != null
     ? text('Enter linea siguiente | flechas moverse | Esc guardar', { fg: 'sec' })
     : errorOrden(estado)
       ? text('err: ' + sanitize(errorOrden(estado)), { fg: 'danger' })
-      : text('j k elegir | m cerrar a mercado | Backspace cancelar | Enter notas', { fg: 'sec' });
+      : text('j k elegir | m cerrar a mercado | Backspace cancelar o borrar | Enter notas', { fg: 'sec' });
 
   return rows([
     text('diario', { fg: 'accent', bold: true }),
@@ -105,9 +134,24 @@ export function vistaDiario(estado, { width, height }) {
     lineaMetricas(estado.operaciones),
     gap(1),
     filas.length
-      ? table({ ...columnasQueEntran(visibles.map(operacion => filaTabla(operacion, precios)), width), cursor: cursor - inicio, fill: true })
+      ? table({
+        ...columnasQueEntran(visibles.map(operacion => filaTabla(operacion, precios)), width),
+        cursor: enAlertas ? null : cursor - tramo.inicio,
+        fill: true,
+      })
       : text('sin operaciones', { fg: 'sec' }),
-    gap(Math.max(1, maxFilas - visibles.length + 1)),
+    ...(alertas.length ? [
+      gap(1),
+      text('alertas', { fg: 'accent', bold: true }),
+      gap(1),
+      table({
+        headers: ENCABEZADOS_ALERTAS,
+        rows: alertas.slice(tramoAlertas.inicio, tramoAlertas.fin).map(filaAlerta),
+        cursor: enAlertas ? cursor - filas.length - tramoAlertas.inicio : null,
+        fill: true,
+      }),
+    ] : []),
+    gap(Math.max(1, height - 6 - visibles.length - seccionAlertas)),
     pie,
   ]);
 }

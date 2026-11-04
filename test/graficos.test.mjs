@@ -402,7 +402,7 @@ test('el monitor arma la ayuda por secciones y la watchlist calcula el ancho par
     { lineas: ['y - Alejar Horizontal', 'u - Alejar Vertical', 'i - Acercar Vertical', 'o - Acercar Horizontal'], resumen: 'y-o - Zoom' },
     { lineas: ['q - Take Profit', 'w - Entrada Limite', 'e - Stop Loss', 'r - Entrada Mercado'], resumen: 'q-r - Operacion' },
     { lineas: ['a - Intervalo 1m', 's - Intervalo 5m', 'd - Intervalo 1h', 'f - Intervalo 4h', 'g - Intervalo 1d'], resumen: 'a-g - Intervalos' },
-    { lineas: ['z - Vista de Tabla', 't - Diario', 'x - Iniciar Mira', 'c - Descartar Accion'], resumen: undefined },
+    { lineas: ['z - Vista de Tabla', 't - Diario', 'x - Iniciar Mira', 'c - Descartar Accion', 'v - Alerta'], resumen: undefined },
     { lineas: ['1 - Media Simple', '2 - Media Exponencial', '3 - RSI', '4 - Volumen', '5 - Bandas de Bollinger'], resumen: '1-5 - Indicadores' },
     { lineas: ['Esc - Volver'], resumen: undefined },
   ]);
@@ -442,7 +442,7 @@ test('la ayuda pliega sus secciones de arriba hacia abajo hasta que entran todos
   assert.ok(texto.some(t => t.includes('h-l - Desplazar')));
   assert.ok(texto.some(t => t.includes('y-o - Zoom')));
   assert.ok(texto.some(t => t.includes('q-r - Operacion')) && texto.some(t => t.includes('a-g - Intervalos')));
-  assert.ok(texto.some(t => t.includes('1 - Media Simple')), 'los indicadores siguen completos');
+  assert.ok(texto.some(t => t.includes('1-5 - Indicadores')), 'y despues los indicadores');
   assert.ok(!texto.some(t => t.includes('h - Izquierda')));
   assert.ok(texto.some(t => t.includes('Enter - Seleccionar')) && texto.some(t => t.includes('z - Vista de Tabla')));
 
@@ -456,7 +456,7 @@ test('la ayuda pliega sus secciones de arriba hacia abajo hasta que entran todos
 test('watchlist pega las ayudas al fondo y colorea la variacion 24h', () => {
   const { lineas, texto } = textoWatchlist(estadoWatchlist(['BTCUSDT', 'ETHUSDT']), 24);
 
-  for (const linea of ['h-l - Desplazar', 'y-o - Zoom', 'q-r - Operacion', 'a-g - Intervalos', '5 - Bandas de Bollinger']) {
+  for (const linea of ['h-l - Desplazar', 'y-o - Zoom', 'q-r - Operacion', 'a-g - Intervalos', '1-5 - Indicadores']) {
     assert.ok(texto.some(t => t.includes(linea)), 'falta la ayuda: ' + linea);
   }
   assert.match(texto[22], /Esc - Volver/);
