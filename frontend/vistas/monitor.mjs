@@ -11,6 +11,7 @@ import { graficoVelas, leerMira, miraEnVela } from '../graficos/velas.mjs';
 import { tablaVelas } from '../graficos/tabla.mjs';
 import { anchoWatchlist, fmtPrecio, fmtVariacion, vistaWatchlist } from '../features/watchlist.mjs';
 import { ANCHO_ORDEN, hayBorrador, vistaOrden } from '../features/orden.mjs';
+import { vistaCarga } from './carga.mjs';
 import { INDICADORES, cabecera, indicadoresVisibles, inferioresVisibles, leyendaIndicadores, medidasInferiores, recuadroInferior } from './indicadores.mjs';
 import { alternarMira, decimalesVisibles, marcarEntrada, marcarNivel, moverMiraMouse, moverMiraTeclado } from './mira.mjs';
 
@@ -69,12 +70,12 @@ function atajos(intervalos = []) {
   const teclasIntervalo = TECLAS_INTERVALO.slice(0, intervalos.length);
   return [
     { atajos: [
-      { teclas: [' '], foco: ['grafico', 'orden'], ayuda: 'Espacio - Confirmar Orden', accion: conservandoMira(monitor => monitor.confirmarBorrador()) },
       { teclas: ['Enter'], foco: 'watchlist', ayuda: 'Enter - Seleccionar', accion: monitor => {
         monitor.setFoco('grafico');
         alTerminarCarga(monitor.seleccionarCursor());
       } },
       { teclas: ['Tab'], ayuda: 'Tab - Cambiar Foco', accion: monitor => monitor.alternarFoco(focosDisponibles(monitor.estado)) },
+      { teclas: ['Enter'], foco: 'orden', accion: conservandoMira(monitor => monitor.confirmarBorrador()) },
     ] },
     { resumen: 'h-l - Desplazar', atajos: [
       { teclas: ['h', 'ArrowLeft'], ayuda: 'h - Izquierda', accion: oMira('h', enGrafico(monitor => monitor.mover('h', cantidadVelasVisibles(monitor.estado)))) },
@@ -136,7 +137,7 @@ export function seccionesAyuda(intervalos) {
   return atajos(intervalos)
     .filter(seccion => seccion.atajos.length)
     .map(({ resumen, atajos }) => ({
-      lineas: atajos.map(atajo => atajo.ayuda),
+      lineas: atajos.map(atajo => atajo.ayuda).filter(Boolean),
       resumen: atajos.length > 1 ? resumen : undefined,
     }));
 }
@@ -300,9 +301,14 @@ export function crearMonitor({ salir, sondeoMs = 5000, ...opciones }) {
   const { estado } = monitor;
 
   return {
-    init: async () => {
+    // la pantalla de carga queda hasta que llegan las primeras velas y tickers
+    init: () => {
       monitor.reiniciarVista();
-      await Promise.all([monitor.cargar(), monitor.cargarTickers()]);
+      estado.cargando = true;
+      Promise.all([monitor.cargar(), monitor.cargarTickers()]).then(() => {
+        estado.cargando = false;
+        invalidate();
+      });
       return estado;
     },
     subscriptions: [Sub.interval(sondeoMs, 'poll')],
@@ -329,6 +335,6 @@ export function crearMonitor({ salir, sondeoMs = 5000, ...opciones }) {
       }
       return model;
     },
-    view: () => vistaMonitor(estado),
+    view: () => estado.cargando ? vistaCarga(size()) : vistaMonitor(estado),
   };
 }

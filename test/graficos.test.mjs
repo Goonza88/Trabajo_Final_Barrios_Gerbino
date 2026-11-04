@@ -397,7 +397,7 @@ test('vistaMonitor compone watchlist y grafico sin romper', async () => {
 test('el monitor arma la ayuda por secciones y la watchlist calcula el ancho para no cortarlas', () => {
   const secciones = seccionesAyuda(['1m', '5m', '1h', '4h', '1d']);
   assert.deepEqual(secciones, [
-    { lineas: ['Espacio - Confirmar Orden', 'Enter - Seleccionar', 'Tab - Cambiar Foco'], resumen: undefined },
+    { lineas: ['Enter - Seleccionar', 'Tab - Cambiar Foco'], resumen: undefined },
     { lineas: ['h - Izquierda', 'j - Abajo', 'k - Arriba', 'l - Derecha'], resumen: 'h-l - Desplazar' },
     { lineas: ['y - Alejar Horizontal', 'u - Alejar Vertical', 'i - Acercar Vertical', 'o - Acercar Horizontal'], resumen: 'y-o - Zoom' },
     { lineas: ['q - Take Profit', 'w - Entrada Limite', 'e - Stop Loss', 'r - Entrada Mercado'], resumen: 'q-r - Operacion' },

@@ -49,6 +49,7 @@ export function crearEstado({
     offset: 0,
     offsetY: 0,
     modoTabla: false,
+    cargando: false,
     mira: null,
     modoMira: false,
     indicadores: { sma: false, ema: false, rsi: false, volume: false, bollinger: true }

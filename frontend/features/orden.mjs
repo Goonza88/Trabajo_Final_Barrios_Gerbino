@@ -67,6 +67,7 @@ export function vistaOrden(estado, { width, height }) {
     fila('en tp', monto(previa.en_tp)),
     fila('en sl', monto(previa.en_sl)),
     fila('ratio', ...ratio(previa.ratio)),
+    aviso,
     gap(1),
     text('cartera', { fg: 'accent', bold: true }),
     gap(1),
@@ -75,7 +76,7 @@ export function vistaOrden(estado, { width, height }) {
     fila('account', monto(cartera.patrimonio, false)),
     gap(1),
     text(porcentaje, enfocada ? { fg: 'accent', bg: 'selected' } : ''),
-    aviso ? gap(1) : null,
-    aviso,
+    gap(1),
+    text('CONFIRMAR (Enter)', { fg: 'accent', bold: true }),
   ].filter(Boolean)), marco);
 }

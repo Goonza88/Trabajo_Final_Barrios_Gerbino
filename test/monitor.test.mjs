@@ -179,29 +179,40 @@ test('l desplaza pasada la ultima vela y la mira sigue hacia los lugares vacios'
   assert.ok(estado.mira.col < ultima, 'h vuelve a las velas');
 });
 
-test('Espacio confirma la orden con el foco en el grafico y Enter selecciona en la watchlist', () => {
-  const { app, estado } = monitorConVelas();
-  app.update(estado, tecla('x'));
-  for (let i = 0; i < 2; i++) app.update(estado, tecla('k'));
-  app.update(estado, tecla('q'));
-  app.update(estado, tecla('r'));
-  app.update(estado, tecla(' '));
-  assert.equal(estado.operaciones.length, 1);
-  assert.equal(estado.operaciones[0].tipo, 'mercado');
+test('Enter confirma la orden con la caja enfocada y en la watchlist solo selecciona', () => {
+  const anterior = process.stdout.columns;
+  process.stdout.columns = 140;
+  try {
+    const { app, estado } = monitorConVelas();
+    const pantalla = () => flatten(app.view(estado), 140, 30).map(linea => sanitize(linea.content));
+    app.update(estado, tecla('x'));
+    for (let i = 0; i < 2; i++) app.update(estado, tecla('k'));
+    app.update(estado, tecla('q'));
+    app.update(estado, tecla('r'));
+    app.update(estado, tecla('Enter'));
+    assert.equal(estado.operaciones.length, 0, 'con el foco en el grafico Enter no confirma');
+    assert.ok(pantalla().some(linea => linea.includes('CONFIRMAR (Enter)')));
 
-  const lineas = flatten(app.view(estado), 80, 24).map(linea => sanitize(linea.content));
-  assert.ok(lineas.filter(linea => linea.includes('┄')).length >= 2, 'la operacion viva deja sus lineas');
+    app.update(estado, tecla('Tab'));
+    app.update(estado, tecla('Enter'));
+    assert.equal(estado.operaciones.length, 1);
+    assert.equal(estado.operaciones[0].tipo, 'mercado');
+    assert.equal(estado.foco, 'grafico', 'la caja cierra y el foco vuelve al grafico');
+    assert.ok(pantalla().filter(linea => linea.includes('┄')).length >= 2, 'la operacion viva deja sus lineas');
 
-  app.update(estado, tecla(' '));
-  assert.equal(estado.operaciones.length, 1, 'sin borrador no crea otra');
-  assert.ok(flatten(app.view(estado), 80, 24).some(linea => sanitize(linea.content).includes('err: falta la entrada')));
+    app.update(estado, tecla('q'));
+    app.update(estado, tecla('Tab'));
+    app.update(estado, tecla('Enter'));
+    assert.equal(estado.operaciones.length, 1, 'un borrador invalido no crea otra');
+    assert.ok(pantalla().some(linea => linea.includes('err: falta la entrada')));
 
-  app.update(estado, tecla('q'));
-  app.update(estado, tecla('r'));
-  app.update(estado, tecla('Tab'));
-  app.update(estado, tecla('Enter'));
-  assert.equal(estado.foco, 'grafico', 'en la watchlist Enter selecciona y vuelve al grafico');
-  assert.equal(estado.operaciones.length, 1, 'y no confirma la orden');
+    app.update(estado, tecla('Tab'));
+    app.update(estado, tecla('Enter'));
+    assert.equal(estado.foco, 'grafico', 'en la watchlist Enter selecciona y vuelve al grafico');
+    assert.equal(estado.operaciones.length, 1, 'y no confirma la orden');
+  } finally {
+    process.stdout.columns = anterior;
+  }
 });
 
 test('la caja de la orden abre con el borrador, muestra la vista previa y cierra al confirmar', () => {
@@ -246,7 +257,7 @@ test('la caja de la orden abre con el borrador, muestra la vista previa y cierra
     assert.ok(lineas.some(linea => /en tp\s+\+\d/.test(linea)), 'el resultado en tp con signo');
     assert.ok(lineas.some(linea => /ratio\s+\d+\.\d\d:1/.test(linea)), 'ganancia:perdida');
 
-    app.update(estado, tecla(' '));
+    app.update(estado, tecla('Enter'));
     assert.equal(estado.operaciones.length, 1);
     assert.ok(!pantalla().some(linea => linea.includes('cartera')), 'al confirmar la caja cierra');
     assert.equal(estado.foco, 'grafico', 'y el foco vuelve al grafico');
