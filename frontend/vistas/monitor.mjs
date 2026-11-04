@@ -11,7 +11,7 @@ import { graficoVelas, leerMira } from '../graficos/velas.mjs';
 import { graficoInferior } from '../graficos/inferior.mjs';
 import { tablaVelas } from '../graficos/tabla.mjs';
 import { anchoWatchlist, fmtPrecio, fmtVariacion, vistaWatchlist } from '../features/watchlist.mjs';
-import { alternarMira, decimalesVisibles, marcarNivel, moverMiraMouse, moverMiraTeclado } from './mira.mjs';
+import { alternarMira, decimalesVisibles, marcarEntrada, marcarNivel, moverMiraMouse, moverMiraTeclado } from './mira.mjs';
 
 // ATAJOS ==========================================================================================
 
@@ -86,9 +86,12 @@ function atajos(intervalos = []) {
     ] },
     { resumen: 'q-r - Operacion', atajos: [
       { teclas: ['q'], ayuda: 'q - Take Profit', accion: conMira((monitor, opciones) => marcarNivel(monitor, opciones, 'take_profit')) },
-      { teclas: ['w'], ayuda: 'w - Entrada', accion: conMira((monitor, opciones) => marcarNivel(monitor, opciones, 'entrada')) },
+      { teclas: ['w'], ayuda: 'w - Entrada Limite', accion: conMira(marcarEntrada) },
       { teclas: ['e'], ayuda: 'e - Stop Loss', accion: conMira((monitor, opciones) => marcarNivel(monitor, opciones, 'stop_loss')) },
-      { teclas: ['r'], ayuda: 'r - Mercado o Limite', accion: enGrafico(monitor => monitor.alternarTipoOrden()) },
+      { teclas: ['r'], ayuda: 'r - Entrada Mercado', accion: enGrafico(monitor => {
+        const ultimo = monitor.estado.velas.at(-1)?.close;
+        if (ultimo != null) monitor.fijarEntrada('mercado', fmtPrecio(ultimo));
+      }) },
     ] },
     { resumen: rango(teclasIntervalo) + ' - Intervalos', atajos: teclasIntervalo.map((tecla, i) => ({
       teclas: [tecla],
@@ -246,11 +249,9 @@ function medidasPanel(estado, cols, height) {
 
 // lineas del borrador - a market la entrada sigue al ultimo precio
 function nivelesBorrador(estado) {
-  const { tipo, entrada, take_profit, stop_loss } = estado.borrador;
-  if (entrada == null && take_profit == null && stop_loss == null) return [];
-  const precioEntrada = tipo === 'mercado' ? estado.velas.at(-1)?.close : entrada;
+  const { entrada, take_profit, stop_loss } = estado.borrador;
   return [
-    { precio: precioEntrada == null ? null : fmtPrecio(precioEntrada), style: { fg: 'text' } },
+    { precio: entrada, style: { fg: 'text' } },
     { precio: take_profit, style: { fg: 'success' } },
     { precio: stop_loss, style: { fg: 'danger' } },
   ];

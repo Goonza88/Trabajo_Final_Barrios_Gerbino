@@ -123,7 +123,7 @@ test('x prende la mira sobre la ultima vela y en modo mira hjkl la mueven', () =
   assert.equal(estado.mira, null);
 });
 
-test('con la mira w, q y e marcan niveles del borrador y se dibujan en el grafico', () => {
+test('w fija la entrada limite, q y e marcan niveles, r entra a mercado y todo se dibuja', () => {
   const { app, estado } = monitorConVelas();
   app.update(estado, tecla('w'));
   assert.equal(estado.borrador.entrada, null, 'sin mira no marca');
@@ -137,6 +137,7 @@ test('con la mira w, q y e marcan niveles del borrador y se dibujan en el grafic
   app.update(estado, tecla('e'));
   const { entrada, take_profit, stop_loss } = estado.borrador;
   assert.match(entrada, /^\d+$/, 'redondea a los decimales de las velas');
+  assert.equal(estado.borrador.tipo, 'limite', 'w fija una entrada limite');
   assert.ok(Number(take_profit) > Number(entrada) && Number(stop_loss) < Number(entrada));
 
   app.update(estado, tecla('x'));
@@ -144,11 +145,11 @@ test('con la mira w, q y e marcan niveles del borrador y se dibujan en el grafic
   assert.ok(lineas.filter(linea => linea.includes('┄')).length >= 3, 'una linea por nivel');
   assert.ok(lineas.some(linea => linea.includes('│ ' + take_profit + ' ')), 'el precio del nivel va en el eje');
 
-  assert.equal(estado.borrador.tipo, 'mercado');
   app.update(estado, tecla('r'));
-  assert.equal(estado.borrador.tipo, 'limite');
+  assert.equal(estado.borrador.tipo, 'mercado', 'r toma una entrada a mercado');
+  assert.equal(estado.borrador.entrada, estado.velas.at(-1).close, 'al ultimo precio');
   app.update(estado, tecla('c'));
-  assert.deepEqual(estado.borrador, { tipo: 'mercado', entrada: null, take_profit: null, stop_loss: null });
+  assert.deepEqual(estado.borrador, { tipo: null, entrada: null, take_profit: null, stop_loss: null });
 });
 
 test('cambiar de simbolo descarta el borrador', async () => {

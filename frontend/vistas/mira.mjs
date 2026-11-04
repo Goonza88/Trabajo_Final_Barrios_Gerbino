@@ -51,8 +51,20 @@ export function moverMiraTeclado(monitor, opciones, dir) {
   }
 }
 
+// precio bajo la mira con los decimales visibles, null sin mira
+function precioMira(opciones) {
+  const lectura = leerMira(opciones);
+  return lectura ? lectura.precio.toFixed(decimalesVisibles(opciones.velas)) : null;
+}
+
 // fija un nivel del borrador al precio bajo la mira
 export function marcarNivel(monitor, opciones, campo) {
-  const lectura = leerMira(opciones);
-  if (lectura) monitor.fijarNivel(campo, lectura.precio.toFixed(decimalesVisibles(opciones.velas)));
+  const precio = precioMira(opciones);
+  if (precio) monitor.fijarNivel(campo, precio);
+}
+
+// fija una entrada limit en el precio bajo la mira
+export function marcarEntrada(monitor, opciones) {
+  const precio = precioMira(opciones);
+  if (precio) monitor.fijarEntrada('limite', precio);
 }

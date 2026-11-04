@@ -10,8 +10,8 @@ const ZOOM_X = Object.freeze({ min: 20, max: 160, paso: 5 });
 const ZOOM_Y = Object.freeze({ min: 0.4, max: 3.0, paso: 0.1 });
 
 // orden sin confirmar - tipo y niveles marcados desde la mira
-const NIVELES_BORRADOR = ['entrada', 'take_profit', 'stop_loss'];
-const borradorVacio = () => ({ tipo: 'mercado', entrada: null, take_profit: null, stop_loss: null });
+const NIVELES_BORRADOR = ['take_profit', 'stop_loss'];
+const borradorVacio = () => ({ tipo: null, entrada: null, take_profit: null, stop_loss: null });
 
 export function crearEstado({
   symbol = 'BTCUSDT',
@@ -222,8 +222,11 @@ export function crearEstado({
     if (NIVELES_BORRADOR.includes(campo)) estado.borrador[campo] = precio;
   }
 
-  function alternarTipoOrden() {
-    estado.borrador.tipo = estado.borrador.tipo === 'mercado' ? 'limite' : 'mercado';
+  // entrada limite en un precio elegido o a mercado al ultimo precio
+  function fijarEntrada(tipo, precio) {
+    if (tipo !== 'mercado' && tipo !== 'limite') return;
+    estado.borrador.tipo = tipo;
+    estado.borrador.entrada = precio;
   }
 
   function descartarBorrador() {
@@ -275,7 +278,7 @@ export function crearEstado({
     setMira,
     alternarModoMira,
     fijarNivel,
-    alternarTipoOrden,
+    fijarEntrada,
     descartarBorrador,
     reiniciarVista,
     mover,
