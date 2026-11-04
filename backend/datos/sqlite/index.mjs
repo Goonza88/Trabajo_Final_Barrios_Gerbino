@@ -112,18 +112,7 @@ function validateFilter(filter, allowed) {
   validateFields(filter, allowed);
 }
 
-export function createData(options = {}) {
-  if (options == null || typeof options !== 'object' || Array.isArray(options)) {
-    throw new Error('se espera un objeto');
-  }
-  validateFields(options, ['ahora', 'path']);
-  const clock = options.ahora ?? Date.now;
-  if (typeof clock !== 'function') throw new Error('ahora invalido');
-  const filename = options.path ?? path.join(PROJECT, 'data', 'app.db');
-  if (filename !== ':memory:') {
-    mkdirSync(path.dirname(path.resolve(filename)), { recursive: true });
-  }
-  const db = new DatabaseSync(filename);
+function initializeDatabase(db, clock) {
   db.exec(`
     PRAGMA foreign_keys = ON;
     PRAGMA journal_mode = WAL;
@@ -168,6 +157,26 @@ export function createData(options = {}) {
       }
     }
   }
+}
+
+export function createData(options = {}) {
+  if (options == null || typeof options !== 'object' || Array.isArray(options)) {
+    throw new Error('se espera un objeto');
+  }
+  validateFields(options, ['ahora', 'path']);
+  const clock = options.ahora ?? Date.now;
+  if (typeof clock !== 'function') throw new Error('ahora invalido');
+  const filename = options.path ?? path.join(PROJECT, 'data', 'app.db');
+  if (filename !== ':memory:') {
+    mkdirSync(path.dirname(path.resolve(filename)), { recursive: true });
+  }
+  const db = new DatabaseSync(filename);
+  try {
+    initializeDatabase(db, clock);
+  } catch (error) {
+    db.close();
+    throw error;
+  }
 
   const catalog = {
     listExchanges() {
@@ -184,7 +193,11 @@ export function createData(options = {}) {
       if (db.prepare('SELECT 1 FROM exchange WHERE id=?').get(exchange.id)) {
         throw new Error('exchange ya registrado: ' + exchange.id);
       }
-      db.prepare('INSERT INTO exchange VALUES (?,?,?,?,?,?)').run(
+      db.prepare(`
+        INSERT INTO exchange (
+          id, nombre, base_url, ws_url, peso_por_consulta, limite_por_minuto
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
         exchange.id,
         exchange.nombre,
         exchange.base_url,
@@ -203,7 +216,10 @@ export function createData(options = {}) {
       if (db.prepare('SELECT 1 FROM simbolo WHERE exchange_id=? AND symbol=?').get(symbol.exchange_id, symbol.symbol)) {
         throw new Error('simbolo ya registrado: ' + symbol.exchange_id + '/' + symbol.symbol);
       }
-      db.prepare('INSERT INTO simbolo VALUES (?,?,?,?)').run(symbol.exchange_id, symbol.symbol, symbol.base, symbol.quote);
+      db.prepare(`
+        INSERT INTO simbolo (exchange_id, symbol, base, quote)
+        VALUES (?, ?, ?, ?)
+      `).run(symbol.exchange_id, symbol.symbol, symbol.base, symbol.quote);
       return row(db.prepare('SELECT * FROM simbolo WHERE exchange_id=? AND symbol=?'), symbol.exchange_id, symbol.symbol);
     },
     listSymbols(filter = {}) {
@@ -315,7 +331,10 @@ export function createData(options = {}) {
       for (const field of fields.slice(4)) validateNullableDecimal(ticker[field], field);
       checkSymbol(db, ticker.exchange_id, ticker.symbol);
       db.prepare(`
-        INSERT INTO ticker VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO ticker (
+          exchange_id, symbol, timestamp, price, open_24h,
+          high_24h, low_24h, volume_24h, quote_volume_24h
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(exchange_id, symbol, timestamp) DO UPDATE SET
           price=excluded.price,
           open_24h=excluded.open_24h,
@@ -380,7 +399,10 @@ export function createData(options = {}) {
       if (url != null) validateText(url, 'fuente_url');
       const stamp = now(clock);
       db.prepare(`
-        INSERT INTO config VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO config (
+          id, intervalo_por_defecto, exchange_id, simbolo_por_defecto,
+          fuente, fuente_url, sondeo_ms, actualizado_en
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           intervalo_por_defecto=excluded.intervalo_por_defecto,
           exchange_id=excluded.exchange_id,
@@ -430,7 +452,10 @@ export function createData(options = {}) {
         throw new Error('el simbolo ya esta en la watchlist: ' + item.exchange_id + '/' + item.symbol);
       }
       const stamp = now(clock, 'added_at');
-      db.prepare('INSERT INTO watchlist_item VALUES (?,?,?,?,?)').run(watchlist_id, item.exchange_id, item.symbol, stamp, note);
+      db.prepare(`
+        INSERT INTO watchlist_item (watchlist_id, exchange_id, symbol, added_at, note)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(watchlist_id, item.exchange_id, item.symbol, stamp, note);
       return row(db.prepare('SELECT * FROM watchlist_item WHERE watchlist_id=? AND exchange_id=? AND symbol=?'), watchlist_id, item.exchange_id, item.symbol);
     },
     removeItem(watchlist_id, exchange_id, symbol) {
@@ -577,7 +602,9 @@ export function createData(options = {}) {
           ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL, 'abierta', ?)
         `).run(value.exchange_id, value.symbol, value.lado, value.tipo, value.cantidad, value.precio_entrada, fees, stamp, notas);
         const operationId = Number(result.lastInsertRowid);
-        const add = db.prepare('INSERT INTO operacion_tag VALUES (?,?)');
+        const add = db.prepare(
+          'INSERT INTO operacion_tag (operacion_id, tag) VALUES (?, ?)'
+        );
         for (const tag of tags) add.run(operationId, tag);
         const operation = row(db.prepare('SELECT * FROM operacion WHERE id=?'), operationId);
         return oneWithTags(db, 'operacion_tag', 'operacion_id', operation);
@@ -632,7 +659,7 @@ export function createData(options = {}) {
       if (db.prepare('SELECT 1 FROM operacion_tag WHERE operacion_id=? AND tag=?').get(operation_id, tag)) {
         throw new Error('la tag ya esta: ' + tag);
       }
-      db.prepare('INSERT INTO operacion_tag VALUES (?,?)').run(operation_id, tag);
+      db.prepare('INSERT INTO operacion_tag (operacion_id, tag) VALUES (?, ?)').run(operation_id, tag);
       return rows(db.prepare('SELECT tag FROM operacion_tag WHERE operacion_id=? ORDER BY tag'), operation_id)
         .map(value => value.tag);
     },
@@ -670,7 +697,7 @@ export function createData(options = {}) {
           ) VALUES (?, ?, ?, ?, ?, ?)
         `).run(exchange_id, symbol, value.titulo, value.cuerpo, stamp, stamp);
         const noteId = Number(result.lastInsertRowid);
-        const add = db.prepare('INSERT INTO nota_tag VALUES (?,?)');
+        const add = db.prepare('INSERT INTO nota_tag (nota_id, tag) VALUES (?, ?)');
         for (const tag of tags) add.run(noteId, tag);
         const note = row(db.prepare('SELECT * FROM nota WHERE id=?'), noteId);
         return oneWithTags(db, 'nota_tag', 'nota_id', note);
@@ -728,7 +755,7 @@ export function createData(options = {}) {
       if (db.prepare('SELECT 1 FROM nota_tag WHERE nota_id=? AND tag=?').get(note_id, tag)) {
         throw new Error('la tag ya esta: ' + tag);
       }
-      db.prepare('INSERT INTO nota_tag VALUES (?,?)').run(note_id, tag);
+      db.prepare('INSERT INTO nota_tag (nota_id, tag) VALUES (?, ?)').run(note_id, tag);
       return rows(db.prepare('SELECT tag FROM nota_tag WHERE nota_id=? ORDER BY tag'), note_id)
         .map(value => value.tag);
     },
