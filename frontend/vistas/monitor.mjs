@@ -6,7 +6,7 @@ import { size, invalidate, Sub } from '../../backend/terminal/runtime.mjs';
 import { sanitize, textWidth } from '../../backend/terminal/ansi.mjs';
 import { boxSize } from '../../backend/terminal/layout.mjs';
 import { crearEstado } from '../estado/mercado.mjs';
-import { anchoPlot, graficoInferior, graficoVelas, tablaVelas } from '../graficos/velas.mjs';
+import { anchoPlot, graficoInferior, graficoVelas, leerMira, tablaVelas } from '../graficos/velas.mjs';
 import { anchoWatchlist, fmtPrecio, fmtVariacion, vistaWatchlist } from '../features/watchlist.mjs';
 
 // ATAJOS ==========================================================================================
@@ -163,7 +163,7 @@ function cabecera(titulo, partes, ancho) {
   return cols([titulo, ...entran], { widths: [Math.max(0, ancho - derecha)], gap: 1 });
 }
 
-// series de los indicadores activos, recortadas a la ventana visible
+// series de los indicadores activos, recortadas a ventana
 function indicadoresVisibles(estado, inicio, fin) {
   const { series, indicadores: activos } = estado;
   const recortar = valores => valores.slice(inicio, fin);
@@ -202,39 +202,61 @@ function recuadroInferior(vis, inferior, width, height) {
   ]), marco);
 }
 
-// panel de velas - grafico o tabla segun modo, con espacio para indicadores inferiores
-function panelVelas(estado, width, height, visibleCount) {
-  const { inicio, fin } = rangoVentanaVelas(estado.velas.length, visibleCount, estado.offset);
-  const vis = estado.velas.slice(inicio, fin);
-  const indicadores = indicadoresVisibles(estado, inicio, fin);
+// medidas del panel de velas en pantalla
+function medidasPanel(estado, cols, height) {
+  const { watchW, chartW } = dimensiones(estado, cols);
+  const { inicio, fin } = rangoVentanaVelas(estado.velas.length, cantidadVelasVisibles(estado, cols), estado.offset);
   const activos = estado.modoTabla ? [] : inferioresVisibles(estado, inicio, fin);
   const { alto, entran } = medidasInferiores(activos.length, height);
-  const inferiores = activos.slice(0, entran);
-  const marco = {
-    border: 'round',
-    pad: [0, 1],
-    height: height - alto * inferiores.length,
-    borderStyle: estado.foco === 'grafico' ? { fg: 'accent' } : null
-  };
-  const { innerW, innerH } = boxSize(marco, width);
-  const error = estado.error ? sanitize(estado.error) : null;
-  const precio = estado.velas.at(-1)?.close ?? estado.tickers[estado.symbol]?.price;
-  const titulo = estado.symbol + ' ' + estado.interval + ' | ' + fmtPrecio(precio)
-    + ' | 24h:' + fmtVariacion(estado.variaciones[estado.symbol])
-    + ' | ' + fmtHora(estado.actualizado_en);
+  const marco = { border: 'round', pad: [0, 1], height: height - alto * entran };
+  const { innerW, innerH } = boxSize(marco, chartW);
+  // grilla comienza tras el separador, borde y padding, bajo el borde y cabecera
+  const origen = { x: watchW + 3, y: 3 };
+  return { chartW, inicio, fin, inferiores: activos.slice(0, entran), alto, marco, innerW, gridH: Math.max(2, innerH - 3), origen };
+}
 
-  const contenido = estado.modoTabla
-    ? tablaVelas(vis)
-    : graficoVelas({
-      velas: vis,
-      width: innerW,
-      height: Math.max(2, innerH - 3),
-      showAxis: true,
-      interval: estado.interval,
-      zoomY: estado.zoomY,
-      offsetY: estado.offsetY,
-      indicadores,
-    });
+// opciones del grafico de precios para la ventana, mismas para dibujarlo y leer la mira
+function opcionesGrafico(estado, medidas) {
+  return {
+    velas: estado.velas.slice(medidas.inicio, medidas.fin),
+    width: medidas.innerW,
+    height: medidas.gridH,
+    showAxis: true,
+    interval: estado.interval,
+    zoomY: estado.zoomY,
+    offsetY: estado.offsetY,
+    indicadores: indicadoresVisibles(estado, medidas.inicio, medidas.fin),
+    mira: estado.modoTabla ? null : estado.mira,
+  };
+}
+
+// titulo del grafico - con mira muestra precio, variacion y hora de la vela
+function tituloGrafico(estado, opciones) {
+  const lectura = opciones.mira ? leerMira(opciones) : null;
+  const inicio = estado.symbol + ' ' + estado.interval + ' | ';
+  if (lectura) {
+    const { vela, precio } = lectura;
+    // mismos decimales que los precios visibles, sin contar ceros al final
+    const decimales = Math.max(0, ...opciones.velas.flatMap(v => [v.open, v.high, v.low, v.close])
+      .map(p => (String(p).split('.')[1] ?? '').replace(/0+$/, '').length));
+    const variacion = (Number(vela.close) - Number(vela.open)) / Number(vela.open) * 100;
+    const hora = new Date(vela.open_time).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    return inicio + fmtPrecio(precio.toFixed(decimales)) + ' | vela:' + fmtVariacion(variacion) + ' | ' + hora;
+  }
+  const precio = estado.velas.at(-1)?.close ?? estado.tickers[estado.symbol]?.price;
+  return inicio + fmtPrecio(precio) + ' | 24h:' + fmtVariacion(estado.variaciones[estado.symbol])
+    + ' | ' + fmtHora(estado.actualizado_en);
+}
+
+// panel de velas - grafico o tabla segun modo, con espacio para indicadores inferiores
+function panelVelas(estado, medidas) {
+  const { chartW, inferiores, alto, innerW } = medidas;
+  const opciones = opcionesGrafico(estado, medidas);
+  const vis = opciones.velas;
+  const marco = { ...medidas.marco, borderStyle: estado.foco === 'grafico' ? { fg: 'accent' } : null };
+  const error = estado.error ? sanitize(estado.error) : null;
+  const titulo = tituloGrafico(estado, opciones);
+  const contenido = estado.modoTabla ? tablaVelas(vis) : graficoVelas(opciones);
 
   const grafico = box(rows([
     cabecera(text(titulo, { fg: 'accent' }), leyendaIndicadores(estado), innerW),
@@ -243,24 +265,43 @@ function panelVelas(estado, width, height, visibleCount) {
     error ? text('err: ' + error, { fg: 'danger' }) : null
   ].filter(Boolean)), marco);
   if (!inferiores.length) return grafico;
-  return rows([grafico, ...inferiores.map(inferior => recuadroInferior(vis, inferior, width, alto))]);
+  return rows([grafico, ...inferiores.map(inferior => recuadroInferior(vis, inferior, chartW, alto))]);
 }
 
 export function vistaMonitor(estado) {
   const { cols, rows: height } = size();
-  const { watchW, chartW } = dimensiones(estado, cols);
+  const { watchW } = dimensiones(estado, cols);
   return split({
     dir: 'h',
     sizes: [watchW, null],
     gap: 1,
     children: [
       vistaWatchlist(estado, { width: watchW, height, ayuda: seccionesAyuda(estado.intervalos) }),
-      panelVelas(estado, chartW, height, cantidadVelasVisibles(estado, cols))
+      panelVelas(estado, medidasPanel(estado, cols, height))
     ]
   });
 }
 
 // APP =============================================================================================
+
+// con click izquierdo sostenido sobre el grafico la mira sigue al mouse
+function moverMira(monitor, event) {
+  const { estado } = monitor;
+  if (event.phase === 'up') return monitor.setMira(null);
+  if (event.btn !== 0 || estado.modoTabla || (event.phase !== 'down' && event.phase !== 'drag')) return;
+  const { cols, rows: height } = size();
+  const { innerW, gridH, origen } = medidasPanel(estado, cols, height);
+  const ejeW = innerW - anchoPlot(innerW, true);
+  const col = event.col - 1 - origen.x;
+  const row = event.row - 1 - origen.y;
+  const dentro = col >= ejeW && col < innerW && row >= 0 && row < gridH - 1;
+  if (event.phase === 'down' && !dentro) return;
+  if (event.phase === 'drag' && !estado.mira) return;
+  monitor.setMira({
+    col: Math.max(ejeW, Math.min(innerW - 1, col)),
+    row: Math.max(0, Math.min(gridH - 2, row)),
+  });
+}
 
 // arma el monitor como app del runtime
 export function crearMonitor({ salir, sondeoMs = 5000, ...opciones }) {
@@ -278,6 +319,10 @@ export function crearMonitor({ salir, sondeoMs = 5000, ...opciones }) {
       if (event.type === 'key') {
         const atajo = atajos(estado.intervalos).flatMap(seccion => seccion.atajos).find(a => a.teclas.includes(event.key));
         atajo?.accion(monitor);
+        return estado;
+      }
+      if (event.type === 'mouse') {
+        moverMira(monitor, event);
         return estado;
       }
       if (event.type === 'sub:tick' && event.tag === 'poll') {

@@ -132,6 +132,81 @@ function columnaVela(i, cantidad, plotW) {
   return Math.round((i / Math.max(1, cantidad - 1)) * (plotW - 1));
 }
 
+// vela mas cercana a una columna del area de velas, la inversa de columnaVela
+function indiceEnColumna(col, cantidad, plotW) {
+  if (cantidad <= 1) return 0;
+  const estimado = Math.round((col / Math.max(1, plotW - 1)) * (cantidad - 1));
+  const candidatos = [estimado - 1, estimado, estimado + 1].filter(i => i >= 0 && i < cantidad);
+  if (!candidatos.length) return col < 0 ? 0 : cantidad - 1;
+  return candidatos.reduce((mejor, i) =>
+    Math.abs(columnaVela(i, cantidad, plotW) - col) < Math.abs(columnaVela(mejor, cantidad, plotW) - col) ? i : mejor);
+}
+
+// medidas, velas que entran, series recortadas y escala de precios, compartido por grafico y mira
+function prepararGrafico({ velas, width, height, showAxis, zoomY, offsetY, indicadores }) {
+  const totalW = Math.max(1, Math.floor(width));
+  const axisW = anchoEje(totalW, showAxis);
+  const plotW = anchoPlot(totalW, showAxis);
+  const totalH = Math.max(showAxis ? 2 : 1, Math.floor(height));
+  const plotH = Math.max(1, totalH - (showAxis ? 1 : 0));
+  const visibles = limitarVelas(velas, plotW);
+  const recortar = serie => Array.isArray(serie) ? serie.slice(-visibles.length) : null;
+  const smaVisible = recortar(indicadores.sma);
+  const emaVisible = recortar(indicadores.ema);
+  const bandas = indicadores.bollinger && typeof indicadores.bollinger === 'object'
+    ? {
+      middle: recortar(indicadores.bollinger.middle),
+      upper: recortar(indicadores.bollinger.upper),
+      lower: recortar(indicadores.bollinger.lower),
+    }
+    : null;
+  const base = {
+    totalW, axisW, plotW, totalH, plotH, velas: visibles, smaVisible, emaVisible, bandas,
+    colForIndex: (i) => columnaVela(i, visibles.length, plotW),
+  };
+  if (!visibles.length) return base;
+
+  const zY = Number.isFinite(zoomY) && zoomY > 0 ? zoomY : 1;
+  const offY = Number.isFinite(offsetY) ? offsetY : 0;
+  const toLog = (v) => {
+    const value = Number(v);
+    return value > 0 ? Math.log10(value) : NaN;
+  };
+  const series = [smaVisible, emaVisible, bandas?.upper, bandas?.middle, bandas?.lower].filter(Array.isArray);
+  let lmin = Infinity, lmax = -Infinity;
+  for (const c of visibles) {
+    const lo = toLog(c.low), hi = toLog(c.high);
+    if (lo < lmin) lmin = lo;
+    if (hi > lmax) lmax = hi;
+  }
+  for (const serie of series) {
+    for (const value of serie) {
+      if (value == null || !Number.isFinite(Number(value))) continue;
+      const lv = toLog(value);
+      if (!Number.isFinite(lv)) continue;
+      if (lv < lmin) lmin = lv;
+      if (lv > lmax) lmax = lv;
+    }
+  }
+  if (lmin === lmax) { lmin -= 0.002; lmax += 0.002; }
+  const span = (lmax - lmin) * zY;
+  lmin = lmin - (span - (lmax - lmin)) / 2 + offY;
+  lmax = lmin + span;
+  if (lmax - lmin < 1e-12) { lmin -= 0.001; lmax += 0.001; }
+  const lrange = lmax - lmin;
+  const py = (v) => ((lmax - toLog(v)) / lrange) * (plotH - 1);
+  const precioEnFila = (fila) => 10 ** (lmax - (fila / Math.max(1, plotH - 1)) * lrange);
+  return { ...base, lmin, lmax, lrange, py, precioEnFila };
+}
+
+// vela y precio bajo la mira - null sin velas o sin mira
+export function leerMira({ velas = [], width, height, showAxis = true, zoomY = 1, offsetY = 0, indicadores = {}, mira = null } = {}) {
+  const g = prepararGrafico({ velas, width, height, showAxis, zoomY, offsetY, indicadores });
+  if (!mira || !g.velas.length) return null;
+  const fila = Math.max(0, Math.min(g.plotH - 1, mira.row));
+  return { vela: g.velas[indiceEnColumna(mira.col - g.axisW, g.velas.length, g.plotW)], precio: g.precioEnFila(fila) };
+}
+
 function dibujarEscalonCapa(plot, valores, colForIndex, filaParaValor, estilo) {
   const capa = Array.from({ length: plot.length }, () => Array(plot[0]?.length ?? 0).fill(null));
   dibujarEscalon(capa, valores, colForIndex, filaParaValor, estilo);
@@ -151,74 +226,27 @@ export function graficoVelas({
   zoomY = 1,
   offsetY = 0,
   indicadores = {},
+  mira = null,
 } = {}) {
   if (!Number.isFinite(width) || !Number.isFinite(height)) {
     throw new TypeError('graficoVelas: faltan width y height');
   }
 
-  const totalW = Math.max(1, Math.floor(width));
-  const axisW = anchoEje(totalW, showAxis);
-  const plotW = anchoPlot(totalW, showAxis);
-  const totalH = Math.max(showAxis ? 2 : 1, Math.floor(height));
-  const timeAxisH = showAxis ? 1 : 0;
-  const plotH = Math.max(1, totalH - timeAxisH);
+  const g = prepararGrafico({ velas, width, height, showAxis, zoomY, offsetY, indicadores });
+  const { totalW, axisW, plotW, totalH, plotH, smaVisible, emaVisible, bandas, colForIndex } = g;
+  velas = g.velas;
   const cells = Array.from({ length: totalH }, () => Array(totalW).fill(null));
-  const seriesVisibles = serie => Array.isArray(serie) ? serie.slice(-velas.length) : null;
-  velas = limitarVelas(velas, plotW);
-  const smaVisible = seriesVisibles(indicadores.sma);
-  const emaVisible = seriesVisibles(indicadores.ema);
-  const bandas = indicadores.bollinger && typeof indicadores.bollinger === 'object'
-    ? {
-      middle: seriesVisibles(indicadores.bollinger.middle),
-      upper: seriesVisibles(indicadores.bollinger.upper),
-      lower: seriesVisibles(indicadores.bollinger.lower),
-    }
-    : null;
 
   if (!velas.length) {
     putText(cells, 0, 0, 'sin velas', { fg: 'sec' });
     return grid({ width: totalW, height: totalH, cells });
   }
 
-  const zY = Number.isFinite(zoomY) && zoomY > 0 ? zoomY : 1;
-  const offY = Number.isFinite(offsetY) ? offsetY : 0;
-  const toLog = (v) => {
-    const value = Number(v);
-    return value > 0 ? Math.log10(value) : NaN;
-  };
+  const { lmin, lmax, lrange, py } = g;
   const priceSeries = [
     { values: smaVisible, style: { fg: 'accent' } },
     { values: emaVisible, style: { fg: 'sec' } },
   ].filter(serie => Array.isArray(serie.values));
-  const priceScaleSeries = [
-    ...priceSeries.map(serie => serie.values),
-    bandas?.upper,
-    bandas?.middle,
-    bandas?.lower,
-  ].filter(Array.isArray);
-  let lmin = Infinity, lmax = -Infinity;
-  for (const c of velas) {
-    const lo = toLog(c.low), hi = toLog(c.high);
-    if (lo < lmin) lmin = lo;
-    if (hi > lmax) lmax = hi;
-  }
-  for (const serie of priceScaleSeries) {
-    for (const value of serie) {
-      if (value == null || !Number.isFinite(Number(value))) continue;
-      const lv = toLog(value);
-      if (!Number.isFinite(lv)) continue;
-      if (lv < lmin) lmin = lv;
-      if (lv > lmax) lmax = lv;
-    }
-  }
-  if (lmin === lmax) { lmin -= 0.002; lmax += 0.002; }
-  const span = (lmax - lmin) * zY;
-  lmin = lmin - (span - (lmax - lmin)) / 2 + offY;
-  lmax = lmin + span;
-  if (lmax - lmin < 1e-12) { lmin -= 0.001; lmax += 0.001; }
-  const lrange = lmax - lmin;
-  const py = (v) => ((lmax - toLog(v)) / lrange) * (plotH - 1);
-  const colForIndex = (i) => columnaVela(i, velas.length, plotW);
 
   const labels = [];
 
@@ -455,13 +483,23 @@ export function graficoVelas({
     if (!ylabels.has(rr)) ylabels.set(rr, fmt(price));
   }
 
+  // con la mira la grilla se oculta
+  const colMira = mira ? colForIndex(indiceEnColumna(mira.col - axisW, velas.length, plotW)) : null;
+  const filaMira = mira ? Math.max(0, Math.min(plotH - 1, mira.row)) : null;
+  const celdaFondo = (r, c) => {
+    if (mira) {
+      if (c === colMira && r === filaMira) return { ch: '┼', style: { fg: 'muted' } };
+      if (c === colMira) return { ch: '╎', style: { fg: 'muted' } };
+      if (r === filaMira) return { ch: '╴', style: { fg: 'muted' } };
+      return null;
+    }
+    if (columnasEtiqueta.has(c) || ygrid.has(r)) return { ch: '·', style: { fg: 'muted' } };
+    return null;
+  };
+
   for (let r = 0; r < plotH; r++) {
     for (let c = 0; c < plotW; c++) {
-      let cell = plot[r][c];
-      if (!cell) {
-        if (columnasEtiqueta.has(c)) cell = { ch: '·', style: { fg: 'muted' } };
-        else if (ygrid.has(r)) cell = { ch: '·', style: { fg: 'muted' } };
-      }
+      let cell = plot[r][c] ?? celdaFondo(r, c);
       const bg = bandBackground[r][c];
       if (bg) {
         const style = cell?.style && typeof cell.style === 'object' ? { ...cell.style, bg } : { bg };

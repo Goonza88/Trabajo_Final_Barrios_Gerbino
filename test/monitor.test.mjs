@@ -3,6 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { crearMonitor, seccionesAyuda } from '../frontend/vistas/monitor.mjs';
+import { flatten } from '../backend/terminal/view.mjs';
+import { sanitize } from '../backend/terminal/ansi.mjs';
 
 const tecla = key => ({ type: 'key', key });
 
@@ -60,4 +62,32 @@ test('q cancela y sale', () => {
   const { app, estado, salidas } = monitorDePrueba();
   app.update(estado, tecla('q'));
   assert.equal(salidas(), 1);
+});
+
+test('con el click sostenido la mira cruza el grafico y la cabecera lee la vela elegida', () => {
+  const { app, estado } = monitorDePrueba();
+  estado.velas = Array.from({ length: 40 }, (_, i) => ({
+    open_time: i * 60000, open: String(100 + i), high: String(103 + i), low: String(98 + i), close: String(101 + i), volume: '1',
+  }));
+  const mouse = (phase, col, row) => app.update(estado, { type: 'mouse', btn: 0, phase, col, row });
+  const pantalla = () => flatten(app.view(estado), 80, 24).map(linea => sanitize(linea.content));
+
+  assert.ok(pantalla().some(linea => linea.includes('·')), 'sin mira se ve la grilla');
+  mouse('down', 5, 8);
+  assert.equal(estado.mira, null, 'fuera del grafico no aparece');
+
+  mouse('down', 60, 8);
+  assert.ok(estado.mira);
+  const conMira = pantalla();
+  assert.ok(conMira.some(linea => linea.includes('┼')), 'cruce de las dos lineas');
+  assert.ok(conMira.some(linea => linea.includes('╴')) && conMira.some(linea => linea.includes('╎')));
+  assert.ok(!conMira.some(linea => linea.includes('·')), 'la grilla se oculta');
+  assert.match(conMira[1], /\| vela:\+0\.\d+% \|/, 'la cabecera muestra la vela elegida');
+
+  const antes = { ...estado.mira };
+  mouse('drag', 70, 10);
+  assert.notDeepEqual(estado.mira, antes, 'la mira sigue al mouse');
+  mouse('up', 70, 10);
+  assert.equal(estado.mira, null);
+  assert.match(pantalla()[1], /\| 24h:/, 'al soltar vuelve la cabecera normal');
 });

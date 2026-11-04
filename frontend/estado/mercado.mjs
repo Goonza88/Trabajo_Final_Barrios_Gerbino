@@ -45,6 +45,7 @@ export function crearEstado({
     offset: 0,
     offsetY: 0,
     modoTabla: false,
+    mira: null,
     indicadores: { sma: false, ema: false, rsi: false, volume: false, bollinger: true }
   };
 
@@ -199,6 +200,11 @@ export function crearEstado({
     if (dir === '-') estado.zoomY = Math.min(ZOOM_Y.max, estado.zoomY + ZOOM_Y.paso);
   }
 
+  // celda bajo el click, null al soltar
+  function setMira(mira) {
+    estado.mira = mira;
+  }
+
   function alternarTabla() {
     estado.modoTabla = !estado.modoTabla;
   }
@@ -237,6 +243,7 @@ export function crearEstado({
     zoomH,
     zoomV,
     alternarTabla,
+    setMira,
     reiniciarVista,
     mover,
     cancelar
