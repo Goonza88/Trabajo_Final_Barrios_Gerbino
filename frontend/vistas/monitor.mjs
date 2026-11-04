@@ -6,7 +6,10 @@ import { size, invalidate, Sub } from '../../backend/terminal/runtime.mjs';
 import { sanitize, textWidth } from '../../backend/terminal/ansi.mjs';
 import { boxSize } from '../../backend/terminal/layout.mjs';
 import { crearEstado } from '../estado/mercado.mjs';
-import { anchoPlot, graficoInferior, graficoVelas, leerMira, tablaVelas } from '../graficos/velas.mjs';
+import { anchoPlot } from '../graficos/trazos.mjs';
+import { graficoVelas, leerMira } from '../graficos/velas.mjs';
+import { graficoInferior } from '../graficos/inferior.mjs';
+import { tablaVelas } from '../graficos/tabla.mjs';
 import { anchoWatchlist, fmtPrecio, fmtVariacion, vistaWatchlist } from '../features/watchlist.mjs';
 
 // ATAJOS ==========================================================================================
