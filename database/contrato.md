@@ -201,6 +201,7 @@ Todos son `Error` con mensaje en castellano sin acentos; el texto es parte del c
 | `<campo> invalido: <valor> (se espera uno de ...)` | un valor fuera de un vocabulario |
 | `texto invalido en <campo>: <valor>` | un texto obligatorio vacio o de otro tipo |
 | `parametro requerido: <campo>` | falta un argumento requerido |
+| `se espera un objeto` | un metodo que recibe un objeto recibe `null`, una lista u otro tipo |
 | `campo desconocido: <clave>` | clave no reconocida, o campo no editable |
 | `se espera una lista de velas` | `saveCandles` no recibio un array |
 | `exchange ya registrado: <id>` / `simbolo ya registrado: <e>/<s>` | escritura de catalogo duplicada |
