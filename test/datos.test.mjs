@@ -6,7 +6,6 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createData } from '../backend/datos/sqlite/index.mjs';
-import { up as applyInitialMigration } from '../backend/datos/migraciones/001-inicial.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const schema = readFileSync(path.join(root, 'database', 'schema.sql'), 'utf8');
@@ -98,6 +97,7 @@ test('configuracion', () => {
     assert.equal(datos.config.readConfig(), null);
     const guardada = datos.config.saveConfig({
       intervalo_por_defecto: '1m',
+      saldo_inicial: '10000',
       exchange_id: 'binance',
       simbolo_por_defecto: 'BTCUSDT',
       fuente: 'local',
@@ -170,6 +170,7 @@ test('operaciones: alta, tags, cierre y cancelacion', () => {
 
     const cerrada = datos.operations.closeOperation(abierta.id, {
       precio_salida: '110',
+      motivo_cierre: 'manual',
       fees: '0.1'
     });
     assert.equal(cerrada.estado, 'cerrada');
@@ -292,6 +293,7 @@ test('errores definidos en el contrato', () => {
     error(
       () => datos.config.saveConfig({
         intervalo_por_defecto: '1m',
+        saldo_inicial: '10000',
         exchange_id: 'binance',
         simbolo_por_defecto: 'XRPUSDT',
         fuente: 'local',
@@ -303,6 +305,7 @@ test('errores definidos en el contrato', () => {
     error(
       () => datos.config.saveConfig({
         intervalo_por_defecto: '1m',
+        saldo_inicial: '10000',
         exchange_id: 'binance',
         fuente: 'local',
         sondeo_ms: 5000
@@ -312,6 +315,7 @@ test('errores definidos en el contrato', () => {
     error(
       () => datos.config.saveConfig({
         intervalo_por_defecto: '1m',
+        saldo_inicial: '10000',
         fuente: 'remoto',
         sondeo_ms: 5000
       }),
@@ -320,6 +324,7 @@ test('errores definidos en el contrato', () => {
     error(
       () => datos.config.saveConfig({
         intervalo_por_defecto: '1m',
+        saldo_inicial: '10000',
         fuente: 'local',
         fuente_url: 'https://api.example',
         sondeo_ms: 5000
@@ -329,6 +334,7 @@ test('errores definidos en el contrato', () => {
     error(
       () => datos.config.saveConfig({
         intervalo_por_defecto: '1m',
+        saldo_inicial: '10000',
         exchange_id: 'binance',
         simbolo_por_defecto: '',
         fuente: 'local',
@@ -421,7 +427,7 @@ test('errores definidos en el contrato', () => {
       }),
       'tag repetida: repetida'
     );
-    datos.operations.closeOperation(abierta.id, { precio_salida: '110' });
+    datos.operations.closeOperation(abierta.id, { precio_salida: '110', motivo_cierre: 'manual' });
     error(
       () => datos.operations.closeOperation(abierta.id, { precio_salida: '120' }),
       'la operacion no esta abierta: cerrada'
@@ -429,24 +435,14 @@ test('errores definidos en el contrato', () => {
   });
 });
 
-test('migraciones: esquema actualizado coincide con una base nueva', () => {
+test('createData: aplica el esquema vigente', () => {
   const directory = mkdtempSync(path.join(tmpdir(), 'datos-sqlite-'));
-  const filename = path.join(directory, 'actualizada.db');
-  const freshFilename = path.join(directory, 'nueva.db');
-  const legacy = new DatabaseSync(filename);
+  const filename = path.join(directory, 'nueva.db');
+  const expected = new DatabaseSync(':memory:');
+  const datos = createData({ path: filename, ahora: () => 1000 });
+  const actual = new DatabaseSync(filename);
 
-  try {
-    applyInitialMigration(legacy);
-    legacy.exec('CREATE TABLE schema_migration (id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)');
-    legacy.prepare('INSERT INTO schema_migration(id, applied_at) VALUES (?, ?)').run('001-inicial', 1);
-  } finally {
-    legacy.close();
-  }
-
-  const updated = createData({ path: filename, ahora: () => 1000 });
-  const fresh = createData({ path: freshFilename, ahora: () => 1000 });
-  const updatedDb = new DatabaseSync(filename);
-  const freshDb = new DatabaseSync(freshFilename);
+  expected.exec(schema.replace(/^\s*PRAGMA\s+[^;]+;\s*$/gim, ''));
 
   function schemaOf(db) {
     return db.prepare(`
@@ -463,17 +459,12 @@ test('migraciones: esquema actualizado coincide con una base nueva', () => {
   }
 
   try {
-    assert.deepEqual(schemaOf(updatedDb), schemaOf(freshDb));
-    assert.deepEqual(
-      updatedDb.prepare('SELECT id FROM schema_migration ORDER BY id').all(),
-      freshDb.prepare('SELECT id FROM schema_migration ORDER BY id').all()
-    );
-    assert.deepEqual(updatedDb.prepare('PRAGMA foreign_key_check').all(), []);
+    assert.deepEqual(schemaOf(actual), schemaOf(expected));
+    assert.deepEqual(actual.prepare('PRAGMA foreign_key_check').all(), []);
   } finally {
-    updatedDb.close();
-    freshDb.close();
-    updated.close();
-    fresh.close();
+    actual.close();
+    expected.close();
+    datos.close();
     rmSync(directory, { recursive: true, force: true });
   }
 });
@@ -498,8 +489,8 @@ test("el esquema rechaza decimales con punto final", () => {
     const insertOperation = db.prepare(`
       INSERT INTO operacion (
         exchange_id, symbol, lado, tipo, cantidad, precio_entrada,
-        precio_salida, fees, abierta_en, estado
-      ) VALUES (?, ?, 'compra', 'mercado', ?, ?, ?, ?, 1, 'abierta')
+        precio_salida, fees, creada_en, abierta_en, estado
+      ) VALUES (?, ?, 'compra', 'mercado', ?, ?, ?, ?, 1, 1, 'abierta')
     `);
     assert.throws(() => insertOperation.run('binance', 'BTCUSDT', '1.', '100', null, '0'), /CHECK constraint failed/);
     assert.throws(() => insertOperation.run('binance', 'BTCUSDT', '1', '1.', null, '0'), /CHECK constraint failed/);

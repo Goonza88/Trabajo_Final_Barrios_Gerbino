@@ -7,7 +7,7 @@ import { seedCatalog, up as applyInitialMigration } from '../migraciones/001-ini
 import { up as migrateDecimalChecks } from '../migraciones/002-decimales-sin-punto-final.mjs';
 import {
   INTERVALS, ALERT_OPERATORS, OPERATION_SIDES,
-  ORDER_TYPES, OPERATION_STATES, CONFIG_SOURCES,
+  ORDER_TYPES, OPERATION_STATES, CLOSE_REASONS, CONFIG_SOURCES,
 } from '../contrato/types.mjs';
 import {
   validateDecimal, validateNullableDecimal, validateInteger, validateInstant,
@@ -379,8 +379,9 @@ export function createData(options = {}) {
       return row(db.prepare('SELECT * FROM config WHERE id=?'), 'local');
     },
     saveConfig(value) {
-      validateFields(value, ['intervalo_por_defecto', 'exchange_id', 'simbolo_por_defecto', 'fuente', 'fuente_url', 'sondeo_ms']);
+      validateFields(value, ['intervalo_por_defecto', 'saldo_inicial', 'exchange_id', 'simbolo_por_defecto', 'fuente', 'fuente_url', 'sondeo_ms']);
       validateEnum(required(value?.intervalo_por_defecto, 'intervalo_por_defecto'), 'intervalo_por_defecto', INTERVALS);
+      validateDecimal(required(value?.saldo_inicial, 'saldo_inicial'), 'saldo_inicial');
       validateEnum(required(value?.fuente, 'fuente'), 'fuente', CONFIG_SOURCES);
       validateInteger(required(value?.sondeo_ms, 'sondeo_ms'), 'sondeo_ms', 1);
       const exchange_id = value.exchange_id ?? null;
@@ -413,18 +414,19 @@ export function createData(options = {}) {
       const stamp = now(clock);
       db.prepare(`
         INSERT INTO config (
-          id, intervalo_por_defecto, exchange_id, simbolo_por_defecto,
+          id, intervalo_por_defecto, saldo_inicial, exchange_id, simbolo_por_defecto,
           fuente, fuente_url, sondeo_ms, actualizado_en
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           intervalo_por_defecto=excluded.intervalo_por_defecto,
+          saldo_inicial=excluded.saldo_inicial,
           exchange_id=excluded.exchange_id,
           simbolo_por_defecto=excluded.simbolo_por_defecto,
           fuente=excluded.fuente,
           fuente_url=excluded.fuente_url,
           sondeo_ms=excluded.sondeo_ms,
           actualizado_en=excluded.actualizado_en
-      `).run('local', value.intervalo_por_defecto, exchange_id, symbol, value.fuente, url, value.sondeo_ms, stamp);
+      `).run('local', value.intervalo_por_defecto, value.saldo_inicial, exchange_id, symbol, value.fuente, url, value.sondeo_ms, stamp);
       return row(db.prepare('SELECT * FROM config WHERE id=?'), 'local');
     },
   };
@@ -596,24 +598,44 @@ export function createData(options = {}) {
 
   const operations = {
     registerOperation(value) {
-      validateFields(value, ['exchange_id', 'symbol', 'lado', 'tipo', 'cantidad', 'precio_entrada', 'fees', 'notas', 'tags']);
+      validateFields(value, ['exchange_id', 'symbol', 'lado', 'tipo', 'cantidad', 'precio_entrada', 'take_profit', 'stop_loss', 'estado', 'fees', 'notas', 'tags']);
       validateEnum(required(value?.lado, 'lado'), 'lado', OPERATION_SIDES);
       validateEnum(required(value?.tipo, 'tipo'), 'tipo', ORDER_TYPES);
       validateDecimal(required(value?.cantidad, 'cantidad'), 'cantidad');
       validateDecimal(required(value?.precio_entrada, 'precio_entrada'), 'precio_entrada');
+      const take_profit = validateNullableDecimal(value.take_profit, 'take_profit');
+      const stop_loss = validateNullableDecimal(value.stop_loss, 'stop_loss');
+      const state = value.estado ?? 'abierta';
+      validateEnum(state, 'estado', ['pendiente', 'abierta']);
       const fees = value.fees ?? '0';
       validateDecimal(fees, 'fees');
       const notas = value.notas == null ? null : validateText(value.notas, 'notas');
       const tags = validateTags(value.tags);
       checkSymbol(db, value.exchange_id, value.symbol);
-      const stamp = now(clock, 'abierta_en');
+      const createdAt = now(clock, 'creada_en');
+      const openedAt = state === 'abierta' ? now(clock, 'abierta_en') : null;
       return transaction(db, () => {
         const result = db.prepare(`
           INSERT INTO operacion (
             exchange_id, symbol, lado, tipo, cantidad, precio_entrada,
-            precio_salida, fees, abierta_en, cerrada_en, estado, notas
-          ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL, 'abierta', ?)
-        `).run(value.exchange_id, value.symbol, value.lado, value.tipo, value.cantidad, value.precio_entrada, fees, stamp, notas);
+            take_profit, stop_loss, precio_salida, fees, creada_en,
+            abierta_en, cerrada_en, motivo_cierre, estado, notas
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, NULL, NULL, ?, ?)
+        `).run(
+          value.exchange_id,
+          value.symbol,
+          value.lado,
+          value.tipo,
+          value.cantidad,
+          value.precio_entrada,
+          take_profit,
+          stop_loss,
+          fees,
+          createdAt,
+          openedAt,
+          state,
+          notas
+        );
         const operationId = Number(result.lastInsertRowid);
         const add = db.prepare(
           'INSERT INTO operacion_tag (operacion_id, tag) VALUES (?, ?)'
@@ -649,20 +671,39 @@ export function createData(options = {}) {
       const operation = row(db.prepare('SELECT * FROM operacion WHERE id=?'), operation_id);
       return oneWithTags(db, 'operacion_tag', 'operacion_id', operation);
     },
+    activateOperation(operation_id) {
+      const current = checkOperation(db, operation_id);
+      if (current.estado !== 'pendiente') {
+        throw new Error('la operacion no esta pendiente: ' + current.estado);
+      }
+      db.prepare("UPDATE operacion SET estado='abierta',abierta_en=? WHERE id=?")
+        .run(now(clock, 'abierta_en'), operation_id);
+      const operation = row(db.prepare('SELECT * FROM operacion WHERE id=?'), operation_id);
+      return oneWithTags(db, 'operacion_tag', 'operacion_id', operation);
+    },
     closeOperation(operation_id, closing) {
       const current = checkOperation(db, operation_id);
       if (current.estado !== 'abierta') throw new Error('la operacion no esta abierta: ' + current.estado);
-      validateFields(closing, ['precio_salida', 'fees']);
+      validateFields(closing, ['precio_salida', 'motivo_cierre', 'fees']);
       validateDecimal(required(closing?.precio_salida, 'precio_salida'), 'precio_salida');
+      const closeReason = validateEnum(
+        required(closing?.motivo_cierre, 'motivo_cierre'),
+        'motivo_cierre',
+        CLOSE_REASONS
+      );
       const fees = closing.fees == null ? current.fees : validateDecimal(closing.fees, 'fees');
-      db.prepare("UPDATE operacion SET estado='cerrada',precio_salida=?,cerrada_en=?,fees=? WHERE id=?").run(closing.precio_salida, now(clock), fees, operation_id);
+      db.prepare("UPDATE operacion SET estado='cerrada',precio_salida=?,motivo_cierre=?,cerrada_en=?,fees=? WHERE id=?")
+        .run(closing.precio_salida, closeReason, now(clock), fees, operation_id);
       const operation = row(db.prepare('SELECT * FROM operacion WHERE id=?'), operation_id);
       return oneWithTags(db, 'operacion_tag', 'operacion_id', operation);
     },
     cancelOperation(operation_id) {
       const current = checkOperation(db, operation_id);
-      if (current.estado !== 'abierta') throw new Error('la operacion no esta abierta: ' + current.estado);
-      db.prepare("UPDATE operacion SET estado='cancelada',precio_salida=NULL,cerrada_en=? WHERE id=?").run(now(clock), operation_id);
+      if (current.estado !== 'pendiente' && current.estado !== 'abierta') {
+        throw new Error('la operacion no se puede cancelar: ' + current.estado);
+      }
+      db.prepare("UPDATE operacion SET estado='cancelada',precio_salida=NULL,motivo_cierre=NULL,cerrada_en=? WHERE id=?")
+        .run(now(clock), operation_id);
       const operation = row(db.prepare('SELECT * FROM operacion WHERE id=?'), operation_id);
       return oneWithTags(db, 'operacion_tag', 'operacion_id', operation);
     },

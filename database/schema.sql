@@ -134,13 +134,26 @@ CREATE TABLE operacion (
   tipo           TEXT    NOT NULL CHECK (tipo IN ('mercado','limite')),
   cantidad       TEXT    NOT NULL,
   precio_entrada TEXT    NOT NULL,
+  take_profit    TEXT,
+  stop_loss      TEXT,
   precio_salida  TEXT,
   fees           TEXT    NOT NULL DEFAULT '0',
-  abierta_en     INTEGER NOT NULL,
+  creada_en      INTEGER NOT NULL,
+  abierta_en     INTEGER,
   cerrada_en     INTEGER,
-  estado         TEXT    NOT NULL CHECK (estado IN ('abierta','cerrada','cancelada')),
+  motivo_cierre  TEXT,
+  estado         TEXT    NOT NULL CHECK (estado IN ('pendiente','abierta','cerrada','cancelada')),
   notas          TEXT,
   CHECK (estado <> 'cerrada' OR (precio_salida IS NOT NULL AND cerrada_en IS NOT NULL)),
+  CHECK (
+    (estado = 'pendiente' AND abierta_en IS NULL) OR
+    (estado IN ('abierta','cerrada') AND abierta_en IS NOT NULL) OR
+    estado = 'cancelada'
+  ),
+  CHECK (
+    (estado = 'cerrada' AND motivo_cierre IS NOT NULL AND motivo_cierre IN ('tp','sl','manual')) OR
+    (estado <> 'cerrada' AND motivo_cierre IS NULL)
+  ),
   -- los decimales que carga el usuario van con texto decimal simple:
   -- digitos con un punto y hasta 8 decimales, sin notacion cientifica
   CHECK (
@@ -150,6 +163,16 @@ CREATE TABLE operacion (
     ) AND (
       precio_entrada GLOB '[0-9]*' AND precio_entrada NOT GLOB '*[^0-9.]*' AND precio_entrada NOT GLOB '*.*.*'
       AND (instr(precio_entrada, '.') = 0 OR (length(precio_entrada) - instr(precio_entrada, '.') BETWEEN 1 AND 8))
+    ) AND (
+      take_profit IS NULL OR (
+        take_profit GLOB '[0-9]*' AND take_profit NOT GLOB '*[^0-9.]*' AND take_profit NOT GLOB '*.*.*'
+        AND (instr(take_profit, '.') = 0 OR (length(take_profit) - instr(take_profit, '.') BETWEEN 1 AND 8))
+      )
+    ) AND (
+      stop_loss IS NULL OR (
+        stop_loss GLOB '[0-9]*' AND stop_loss NOT GLOB '*[^0-9.]*' AND stop_loss NOT GLOB '*.*.*'
+        AND (instr(stop_loss, '.') = 0 OR (length(stop_loss) - instr(stop_loss, '.') BETWEEN 1 AND 8))
+      )
     ) AND (
       precio_salida IS NULL OR (
         precio_salida GLOB '[0-9]*' AND precio_salida NOT GLOB '*[^0-9.]*' AND precio_salida NOT GLOB '*.*.*'
@@ -192,6 +215,7 @@ CREATE TABLE nota_tag (
 CREATE TABLE config (
   id                    TEXT PRIMARY KEY CHECK (id = 'local'),
   intervalo_por_defecto TEXT NOT NULL CHECK (intervalo_por_defecto IN ('1m','5m','1h','4h','1d')),
+  saldo_inicial         TEXT NOT NULL,
   exchange_id           TEXT,
   simbolo_por_defecto   TEXT,
   fuente                TEXT NOT NULL CHECK (fuente IN ('local','remoto')),
@@ -200,6 +224,13 @@ CREATE TABLE config (
   actualizado_en        INTEGER NOT NULL,
   CHECK ((exchange_id IS NULL) = (simbolo_por_defecto IS NULL)),
   CHECK ((fuente = 'remoto') = (fuente_url IS NOT NULL)),
+  CHECK (
+    saldo_inicial GLOB '[0-9]*' AND saldo_inicial NOT GLOB '*[^0-9.]*' AND saldo_inicial NOT GLOB '*.*.*'
+    AND (
+      instr(saldo_inicial, '.') = 0
+      OR (length(saldo_inicial) - instr(saldo_inicial, '.') BETWEEN 1 AND 8)
+    )
+  ),
   FOREIGN KEY (exchange_id, simbolo_por_defecto)
     REFERENCES simbolo(exchange_id, symbol) ON DELETE SET NULL
 );
@@ -208,5 +239,5 @@ CREATE TABLE config (
 
 CREATE INDEX idx_alerta_activa    ON alerta(exchange_id, symbol, activa);
 CREATE INDEX idx_operacion_estado ON operacion(exchange_id, symbol, estado);
-CREATE INDEX idx_operacion_fecha  ON operacion(abierta_en);
+CREATE INDEX idx_operacion_fecha  ON operacion(creada_en);
 CREATE INDEX idx_nota_symbol      ON nota(exchange_id, symbol);

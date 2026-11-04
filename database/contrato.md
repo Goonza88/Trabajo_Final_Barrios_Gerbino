@@ -117,7 +117,8 @@ Salvo indicacion contraria, los nombres de los campos son los de las columnas de
 | `saveConfig(config)` | objeto `config` (sin `id`) | la fila guardada |
 
 - Una fila con `id = 'local'`; `readConfig` es `null` hasta el primer `saveConfig`, que reemplaza la fila y pone `actualizado_en` con el reloj
-- `intervalo_por_defecto` sale de `INTERVALS`; `fuente` de `CONFIG_SOURCES`; `sondeo_ms` es entero positivo
+- `intervalo_por_defecto` sale de `INTERVALS`; `saldo_inicial` es decimal; `fuente` de `CONFIG_SOURCES`; `sondeo_ms` es entero positivo
+- El saldo actual no se persiste; la app lo calcula con el PnL de las operaciones cerradas
 - `exchange_id` y `simbolo_por_defecto` van juntos; el simbolo debe tener habilitado `intervalo_por_defecto`
 - `fuente: 'remoto'` exige `fuente_url`; `'local'` no la admite; el campo que no corresponde queda en `null`
 
@@ -163,14 +164,20 @@ Salvo indicacion contraria, los nombres de los campos son los de las columnas de
 | `registerOperation(operacion)` | ver abajo | la fila creada, con `tags` |
 | `listOperations(filtro)` | `{ exchange_id?, symbol?, estado? }` | `operacion[]`, con `tags` |
 | `getOperation(id)` | entero | la fila con `tags`, o `null` |
-| `closeOperation(id, cierre)` | entero y `{ precio_salida, fees? }` | la fila actualizada, con `tags` |
+| `activateOperation(id)` | entero | la fila actualizada, con `tags` |
+| `closeOperation(id, cierre)` | entero y `{ precio_salida, motivo_cierre, fees? }` | la fila actualizada, con `tags` |
 | `cancelOperation(id)` | entero | la fila actualizada, con `tags` |
 | `addTag(operacion_id, tag)` | entero y texto | `string[]` de tags |
 | `removeTag(operacion_id, tag)` | entero y texto | `string[]` de tags |
 
-- `registerOperation`: `{ exchange_id, symbol, lado, tipo, cantidad, precio_entrada, fees?, notas?, tags? }`; arranca en `abierta`, con `precio_salida` y `cerrada_en` en `null`, `fees = '0'` si no viene y `abierta_en` del reloj; `fees` es el total acumulado
+- `registerOperation`: `{ exchange_id, symbol, lado, tipo, cantidad, precio_entrada, take_profit?, stop_loss?, estado?, fees?, notas?, tags? }`; acepta `estado = 'pendiente'` o `'abierta'` (por defecto); `creada_en` sale del reloj; `abierta_en` queda `null` si arranca pendiente y sale del reloj si arranca abierta; `precio_salida`, `motivo_cierre` y `cerrada_en` quedan en `null`; `fees = '0'` si no viene y representa el total acumulado
 - `lado` sale de `OPERATION_SIDES`; `tipo` de `ORDER_TYPES`; las `tags` no se repiten ni son vacias
-- `closeOperation` y `cancelOperation`: solo sobre `abierta`; la primera deja `estado = 'cerrada'` y guarda `precio_salida`, `cerrada_en` y, si viene, `fees`; la segunda deja `estado = 'cancelada'`, `cerrada_en` y `precio_salida = null`
+- `estado` sale de `OPERATION_STATES`; al registrar solo puede ser `pendiente` o `abierta`
+- `take_profit` y `stop_loss` son decimales opcionales; la coherencia con el precio de entrada se valida en la app
+- `creada_en` siempre se pone al registrar; `abierta_en` queda `null` en pendiente, es obligatorio en abierta y cerrada, y puede quedar `null` si se cancela estando pendiente
+- `activateOperation`: solo sobre `pendiente`; deja `estado = 'abierta'` y pone `abierta_en` con el reloj
+- `closeOperation`: solo sobre `abierta`; deja `estado = 'cerrada'` y guarda `precio_salida`, `motivo_cierre`, `cerrada_en` y, si viene, `fees`; `motivo_cierre` sale de `CLOSE_REASONS`
+- `cancelOperation`: solo sobre `pendiente` o `abierta`; deja `estado = 'cancelada'`, pone `cerrada_en` y deja `precio_salida` y `motivo_cierre` en `null`; conserva `abierta_en` si ya estaba abierta
 - `addTag` y `removeTag`: la tag no se repite ni falta; devuelven la lista
 - `listOperations` ordena por `id`
 
@@ -214,6 +221,8 @@ Todos son `Error` con mensaje en castellano sin acentos; el texto es parte del c
 | `campo <x> no corresponde al tipo <tipo> (se espera <y>)` | pareja `tipo`/`campo` de alerta rota |
 | `el simbolo ya esta en la watchlist: <e>/<s>` / `el simbolo no esta en la watchlist: <e>/<s>` | el item de watchlist ya esta o no esta |
 | `watchlist inexistente: <id>` / `alerta inexistente: <id>` / `operacion inexistente: <id>` / `nota inexistente: <id>` | escritura sobre un id desconocido |
-| `la operacion no esta abierta: <estado>` | cerrar o cancelar algo que no esta abierto |
+| `la operacion no esta abierta: <estado>` | cerrar algo que no esta abierto |
+| `la operacion no esta pendiente: <estado>` | activar algo que no esta pendiente |
+| `la operacion no se puede cancelar: <estado>` | cancelar una operacion cerrada o cancelada |
 | `la tag ya esta: <t>` / `la tag no existe: <t>` | tag duplicada o ausente |
 | `tag repetida: <t>` | tags repetidas dentro de la misma alta |

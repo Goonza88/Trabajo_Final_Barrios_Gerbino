@@ -15,7 +15,8 @@ export const FIELD_BY_TYPE = {
 export const ALERT_OPERATORS = ['>', '>=', '<', '<=', '==', 'cruza_arriba', 'cruza_abajo'];
 export const OPERATION_SIDES = ['compra', 'venta'];
 export const ORDER_TYPES = ['mercado', 'limite'];
-export const OPERATION_STATES = ['abierta', 'cerrada', 'cancelada'];
+export const OPERATION_STATES = ['pendiente', 'abierta', 'cerrada', 'cancelada'];
+export const CLOSE_REASONS = ['tp', 'sl', 'manual'];
 export const CONFIG_SOURCES = ['local', 'remoto'];
 
 // catalogo inicial de la base - lo cargan las migraciones (valores velas/limites en docs/exchanges.md)
