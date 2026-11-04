@@ -8,7 +8,8 @@ import { anchoPlot, limitarVelas } from '../frontend/graficos/trazos.mjs';
 import { graficoVelas } from '../frontend/graficos/velas.mjs';
 import { graficoInferior } from '../frontend/graficos/inferior.mjs';
 import { tablaVelas } from '../frontend/graficos/tabla.mjs';
-import { capacidadVelas, cantidadVelasVisibles, rangoVentanaVelas, seccionesAyuda, vistaMonitor } from '../frontend/vistas/monitor.mjs';
+import { seccionesAyuda, vistaMonitor } from '../frontend/vistas/monitor.mjs';
+import { capacidadVelas, cantidadVelasVisibles, dimensiones, rangoVentanaVelas } from '../frontend/vistas/medidas.mjs';
 import { crearEstado } from '../frontend/estado/mercado.mjs';
 import { anchoWatchlist, vistaWatchlist } from '../frontend/features/watchlist.mjs';
 
@@ -297,12 +298,13 @@ test('el grafico muestra solo velas reales que entran en el area', () => {
 
 test('la capacidad depende del ancho y modo tabla conserva ventana', () => {
   const estado = { zoomX: 80, intervalos: ['1m', '5m', '1h', '4h', '1d'], borrador: { entrada: null, take_profit: null, stop_loss: null } };
-  const capacidad = capacidadVelas(estado, 80);
+  const anchos = dimensiones(estado, 80, seccionesAyuda(estado.intervalos));
+  const capacidad = capacidadVelas(anchos);
 
   assert.ok(capacidad > 0 && capacidad < estado.zoomX);
-  assert.equal(cantidadVelasVisibles(estado, 80), capacidad);
-  assert.equal(cantidadVelasVisibles({ ...estado, zoomX: 20 }, 80), 20);
-  assert.equal(cantidadVelasVisibles({ ...estado, modoTabla: true }, 80), 80);
+  assert.equal(cantidadVelasVisibles(estado, anchos), capacidad);
+  assert.equal(cantidadVelasVisibles({ ...estado, zoomX: 20 }, anchos), 20);
+  assert.equal(cantidadVelasVisibles({ ...estado, modoTabla: true }, anchos), 80);
 });
 
 test('la ventana muestra velas consecutivas', () => {
@@ -315,7 +317,7 @@ test('la ventana muestra velas consecutivas', () => {
 
 test('el monitor muestra velas consecutivas hasta el maximo que entra', () => {
   const estado = { zoomX: 80, intervalos: ['1m', '5m', '1h', '4h', '1d'], borrador: { entrada: null, take_profit: null, stop_loss: null } };
-  const capacidad = cantidadVelasVisibles(estado, 80);
+  const capacidad = cantidadVelasVisibles(estado, dimensiones(estado, 80, seccionesAyuda(estado.intervalos)));
   const fuente = velas(capacidad * 2);
   const { inicio, fin } = rangoVentanaVelas(fuente.length, capacidad);
   const visibles = fuente.slice(inicio, fin);

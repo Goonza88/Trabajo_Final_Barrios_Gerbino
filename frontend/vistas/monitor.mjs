@@ -6,17 +6,17 @@ import { size, invalidate, Sub } from '../../backend/terminal/runtime.mjs';
 import { sanitize } from '../../backend/terminal/ansi.mjs';
 import { boxSize } from '../../backend/terminal/layout.mjs';
 import { crearEstado } from '../estado/mercado.mjs';
-import { anchoPlot } from '../graficos/trazos.mjs';
 import { graficoVelas, leerMira, miraEnVela } from '../graficos/velas.mjs';
 import { tablaVelas } from '../graficos/tabla.mjs';
-import { anchoWatchlist, fmtPrecio, fmtVariacion, vistaWatchlist } from '../features/watchlist.mjs';
-import { ANCHO_ORDEN, hayBorrador, vistaOrden } from '../features/orden.mjs';
+import { fmtPrecio, fmtVariacion, vistaWatchlist } from '../features/watchlist.mjs';
+import { vistaOrden } from '../features/orden.mjs';
 import { vistaCarga } from './carga.mjs';
+import { capacidadZoom, cantidadVelasVisibles, conGrafico, dimensiones, medidasPanel } from './medidas.mjs';
 import { vistaDiario } from '../features/diario.mjs';
 import { altoNotas, filasNotas, vistaNotas } from '../features/notas.mjs';
 import { errorOrden } from '../estado/operaciones.mjs';
-import { INDICADORES, cabecera, indicadoresVisibles, inferioresVisibles, leyendaIndicadores, medidasInferiores, recuadroInferior } from './indicadores.mjs';
-import { ALTO_AVISO, vistaAviso } from '../features/avisos.mjs';
+import { INDICADORES, cabecera, indicadoresVisibles, leyendaIndicadores, recuadroInferior } from './indicadores.mjs';
+import { vistaAviso } from '../features/avisos.mjs';
 import { alternarMira, decimalesVisibles, marcarAlerta, marcarEntrada, marcarNivel, moverMiraMouse, moverMiraTeclado } from './mira.mjs';
 
 // ATAJOS ==========================================================================================
@@ -32,9 +32,6 @@ function alTerminarCarga(promesa) {
 const enGrafico = accion => monitor => {
   if (monitor.estado.foco === 'grafico') accion(monitor);
 };
-
-// el grafico se ve si no lo reemplazan la tabla ni el diario
-const conGrafico = estado => !estado.modoTabla && !estado.modoDiario;
 
 // la accion solo corre con el diario abierto y el foco en el
 const enDiario = accion => monitor => {
@@ -69,13 +66,16 @@ const conservandoMira = accion => monitor => {
   if (indice >= 0) monitor.setMira(miraEnVela(opciones, indice, estado.mira.row));
 };
 
+// anchos de los paneles en la terminal actual
+const anchosActuales = estado => dimensiones(estado, size().cols, seccionesAyuda(estado.intervalos));
+
 // focos por los que pasa Tab - la caja de la orden solo mientras se ve
 function focosDisponibles(estado) {
   return [
     'watchlist',
     ...(estado.avisos.length ? ['aviso'] : []),
     'grafico',
-    ...(dimensiones(estado, size().cols).ordenW ? ['orden'] : []),
+    ...(anchosActuales(estado).ordenW ? ['orden'] : []),
   ];
 }
 
@@ -95,7 +95,7 @@ function atajos(intervalos = []) {
       { teclas: ['Enter'], foco: 'orden', accion: conservandoMira(monitor => monitor.confirmarBorrador()) },
     ] },
     { resumen: 'h-l - Desplazar', atajos: [
-      { teclas: ['h', 'ArrowLeft'], ayuda: 'h - Izquierda', accion: oMira('h', enGrafico(monitor => monitor.mover('h', cantidadVelasVisibles(monitor.estado)))) },
+      { teclas: ['h', 'ArrowLeft'], ayuda: 'h - Izquierda', accion: oMira('h', enGrafico(monitor => monitor.mover('h', cantidadVelasVisibles(monitor.estado, anchosActuales(monitor.estado))))) },
       { teclas: ['j', 'ArrowDown'], ayuda: 'j - Abajo', accion: oMira('j', monitor => {
         if (monitor.estado.foco === 'watchlist') monitor.moverCursor(1);
         else if (monitor.estado.foco === 'orden') monitor.cambiarPorcentaje('-');
@@ -108,13 +108,13 @@ function atajos(intervalos = []) {
         else if (monitor.estado.modoDiario) monitor.moverDiario(-1);
         else monitor.mover('k');
       }) },
-      { teclas: ['l', 'ArrowRight'], ayuda: 'l - Derecha', accion: oMira('l', enGrafico(monitor => monitor.mover('l', cantidadVelasVisibles(monitor.estado)))) },
+      { teclas: ['l', 'ArrowRight'], ayuda: 'l - Derecha', accion: oMira('l', enGrafico(monitor => monitor.mover('l', cantidadVelasVisibles(monitor.estado, anchosActuales(monitor.estado))))) },
     ] },
     { resumen: 'y-o - Zoom', atajos: [
-      { teclas: ['y'], ayuda: 'y - Alejar Horizontal', accion: enGrafico(monitor => monitor.zoomH('-', capacidadZoom(monitor.estado))) },
+      { teclas: ['y'], ayuda: 'y - Alejar Horizontal', accion: enGrafico(monitor => monitor.zoomH('-', capacidadZoom(monitor.estado, anchosActuales(monitor.estado)))) },
       { teclas: ['u'], ayuda: 'u - Alejar Vertical', accion: enGrafico(monitor => monitor.zoomV('-')) },
       { teclas: ['i'], ayuda: 'i - Acercar Vertical', accion: enGrafico(monitor => monitor.zoomV('+')) },
-      { teclas: ['o'], ayuda: 'o - Acercar Horizontal', accion: enGrafico(monitor => monitor.zoomH('+', capacidadZoom(monitor.estado))) },
+      { teclas: ['o'], ayuda: 'o - Acercar Horizontal', accion: enGrafico(monitor => monitor.zoomH('+', capacidadZoom(monitor.estado, anchosActuales(monitor.estado)))) },
     ] },
     { resumen: 'q-r - Operacion', atajos: [
       { teclas: ['q'], ayuda: 'q - Take Profit', accion: conservandoMira(conMira((monitor, opciones) => marcarNivel(monitor, opciones, 'take_profit'))) },
@@ -171,63 +171,11 @@ export function seccionesAyuda(intervalos) {
     }));
 }
 
-// MEDIDAS =========================================================================================
+// PANELES =========================================================================================
 
 function fmtHora(ts) {
   if (!ts) return '-';
   try { return new Date(ts).toLocaleTimeString('es-AR'); } catch { return '-'; }
-}
-
-// anchos de watchlist, grafico y caja de la orden - la caja solo si hay orden y el grafico conserva 40 columnas
-function dimensiones(estado, cols) {
-  const watchW = Math.max(anchoWatchlist(seccionesAyuda(estado.intervalos)), Math.min(32, Math.floor(cols * 0.38)));
-  const ordenW = hayBorrador(estado.borrador) && cols - watchW - ANCHO_ORDEN - 2 >= 40 ? ANCHO_ORDEN : 0;
-  const chartW = Math.max(1, cols - watchW - 1 - (ordenW ? ordenW + 1 : 0));
-  return { watchW, chartW, ordenW };
-}
-
-// cuantas velas entran en el grafico segun el ancho de la terminal
-export function capacidadVelas(estado, cols = size().cols) {
-  const { chartW } = dimensiones(estado, cols);
-  const marco = { border: 'round', pad: [0, 1] };
-  const { innerW } = boxSize(marco, chartW);
-  return anchoPlot(innerW, true);
-}
-
-// la tabla no esta limitada por el ancho del grafico
-function capacidadZoom(estado, cols) {
-  return estado.modoTabla ? Infinity : capacidadVelas(estado, cols);
-}
-
-export function cantidadVelasVisibles(estado, cols = size().cols) {
-  return Math.min(estado.zoomX, capacidadZoom(estado, cols));
-}
-
-// ventana de velas visibles - offset negativo son lugares vacios a la derecha de la ultima
-export function rangoVentanaVelas(total, cantidad, offset = 0) {
-  const count = Math.max(1, Math.floor(cantidad));
-  const maxOffset = Math.max(0, total - count);
-  const safeOffset = Number.isFinite(offset)
-    ? Math.max(-(count - 1), Math.min(maxOffset, Math.floor(offset)))
-    : 0;
-  const vacias = Math.max(0, -safeOffset);
-  const fin = total - Math.max(0, safeOffset);
-  return { inicio: Math.max(0, fin - (count - vacias)), fin, vacias };
-}
-
-// PANELES =========================================================================================
-
-// medidas del panel de velas en pantalla
-function medidasPanel(estado, cols, height) {
-  const { watchW, chartW } = dimensiones(estado, cols);
-  const { inicio, fin, vacias } = rangoVentanaVelas(estado.velas.length, cantidadVelasVisibles(estado, cols), estado.offset);
-  const activos = conGrafico(estado) ? inferioresVisibles(estado, inicio, fin) : [];
-  const aviso = estado.avisos.length ? ALTO_AVISO : 0; // avisos quita alto al panel
-  const { alto, entran } = medidasInferiores(activos.length, height - aviso);
-  const marco = { border: 'round', pad: [0, 1], height: height - aviso - alto * entran };
-  const { innerW, innerH } = boxSize(marco, chartW);
-  const origen = { x: watchW + 3, y: aviso + 3 }; // despues de panel, separadores, bordes y titulos
-  return { chartW, inicio, fin, vacias, inferiores: activos.slice(0, entran), alto, marco, innerW, gridH: Math.max(2, innerH - 3), origen };
 }
 
 // lineas de entrada, tp y sl
@@ -268,8 +216,7 @@ function opcionesGrafico(estado, medidas) {
 
 // opciones del grafico con las medidas de la terminal actual
 function opcionesActuales(estado) {
-  const { cols, rows: height } = size();
-  return opcionesGrafico(estado, medidasPanel(estado, cols, height));
+  return opcionesGrafico(estado, medidasPanel(estado, anchosActuales(estado), size().rows));
 }
 
 // titulo del grafico - con mira muestra precio, variacion y hora de la vela
@@ -328,15 +275,16 @@ function conAviso(estado, medidas) {
 }
 
 export function vistaMonitor(estado) {
-  const { cols, rows: height } = size();
-  const { watchW, ordenW } = dimensiones(estado, cols);
+  const { rows: height } = size();
+  const anchos = anchosActuales(estado);
+  const { watchW, ordenW } = anchos;
   return split({
     dir: 'h',
     sizes: ordenW ? [watchW, null, ordenW] : [watchW, null],
     gap: 1,
     children: [
       vistaWatchlist(estado, { width: watchW, height, ayuda: seccionesAyuda(estado.intervalos) }),
-      conAviso(estado, medidasPanel(estado, cols, height)),
+      conAviso(estado, medidasPanel(estado, anchos, height)),
       ordenW ? vistaOrden(estado, { width: ordenW, height }) : null,
     ].filter(Boolean)
   });
@@ -378,8 +326,7 @@ export function crearMonitor({ salir, sondeoMs = 5000, ...opciones }) {
         return estado;
       }
       if (event.type === 'mouse') {
-        const { cols, rows: height } = size();
-        moverMiraMouse(monitor, event, medidasPanel(estado, cols, height));
+        moverMiraMouse(monitor, event, medidasPanel(estado, anchosActuales(estado), size().rows));
         return estado;
       }
       if (event.type === 'sub:tick' && event.tag === 'poll') {
