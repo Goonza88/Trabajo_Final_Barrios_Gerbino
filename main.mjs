@@ -9,6 +9,16 @@ import { crearMonitor } from './frontend/vistas/monitor.mjs';
 
 setPalette(PALETA);
 
+// el aviso experimental de node:sqlite ensucia la pantalla - los demas avisos se muestran igual
+process.removeAllListeners('warning');
+process.on('warning', aviso => {
+  if (aviso.name !== 'ExperimentalWarning' || !aviso.message.includes('SQLite')) console.warn(`${aviso.name}: ${aviso.message}`);
+});
+
+// en la web, b le pide a la pagina bajar la base de la sesion por OSC
+const EN_WEB = Boolean(process.env.TERMINAL_WEB);
+const PEDIR_BASE = '\x1b]7701;descargar-base\x07';
+
 const home = {
   init: () => ({ inicio: new Date() }),
 
@@ -25,6 +35,7 @@ const home = {
       gap(),
       text('m monitor', { fg: 'sec' }),
       text('d demos', { fg: 'sec' }),
+      ...(EN_WEB ? [text('b descargar base', { fg: 'sec' })] : []),
       text('q salir', { fg: 'sec' }),
     ]), { border: 'round', height: filas, pad: [0, 1] });
   },
@@ -32,6 +43,7 @@ const home = {
   update: async (model, event) => {
     if (event.type !== 'key') return model;
     if (event.key === 'q') quit();
+    if (event.key === 'b' && EN_WEB) process.stdout.write(PEDIR_BASE);
     if (event.key === 'd') {
       stop();
       const proteger = () => {};

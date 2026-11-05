@@ -4,7 +4,7 @@ El sistema es una herramienta de monitoreo y analisis de mercados financieros en
 
 El objetivo no es competir con una plataforma comercial, sino aportar un lugar donde centralizar la informacion que hoy esta repartida entre varias, y permitir que los usuarios puedan extender la herramienta con codigo propio.
 
-La propuesta original planteaba el despliegue 100% local, sin cuentas, dependencias o infraestructura. Esa decision se mantiene para el sistema central ya que es la que ordena todo lo demas, sumando una parte con deploy para cumplir con la consigna.
+La propuesta original planteaba el despliegue 100% local, sin cuentas, dependencias o infraestructura. Esa decision se mantiene para el sistema central ya que es la que ordena todo lo demas, sumando una terminal con deploy en web para cumplir con la consigna.
 
 ## Integrantes
 
@@ -36,6 +36,7 @@ El unico requisito es **Node 24 LTS**. No hay `package.json` ni dependencias, po
 git clone https://github.com/Goonza88/Trabajo_Final_Barrios_Gerbino.git
 cd Trabajo_Final_Barrios_Gerbino
 nvm use                              # toma la version de .nvmrc
+nvm install                          # la instala si no la tenemos
 node main.mjs
 ```
 
@@ -52,7 +53,7 @@ La integracion continua (`.github/workflows/ci.yml`) corre los dos pasos en cada
 
 ### Variables de entorno
 
-El sistema no usa variables de entorno, claves ni credenciales: los datos de mercado salen de endpoints publicos de Binance. Por eso el repositorio no incluye un `.env`.
+El sistema no usa claves ni credenciales: los datos de mercado salen de endpoints publicos de Binance. La unica variable es `PORT`, que la define el host donde corre el servidor web, por eso el repositorio no incluye un `.env`.
 
 ## Documentacion y estructura
 
@@ -90,6 +91,10 @@ Trabajo_Final_Barrios_Gerbino/
 │   └── README.md                 > que entra en esta capa y que no
 ├── test/                         # la suite de tests
 │   └── *.test.mjs                > tests para todas las capas - se ejecutan con node --test
+├── web/                          # la terminal desplegada en un servidor web
+│   ├── publico/                  / la pagina que dibuja la terminal en el navegador
+│   ├── servidor.mjs              > ejecuta una copia de la app por visitante y la conecta con la pagina
+│   └── sesion.mjs                > pasa a la app el tamaño de la ventana del navegador del usuario
 ├── .gitignore                    > ignoramos la base de datos generada para no subirla
 ├── .nvmrc                        > node 24 LTS - la version que usan nvm y la CI
 ├── main.mjs                      > entrypoint de la app
@@ -118,9 +123,12 @@ Trabajo_Final_Barrios_Gerbino/
 - **un solo exchange** - los datos salen de los endpoints publicos de Binance, sin ellos no hay precios ni velas
 - **precios por consulta** - las velas y los tickers se piden y actualizan cada 5 segundos
 
-### Propuesta de Despliegue (Etapa Final)
+### Despliegue
 
-Como la etapa final pide que hosteemos algo, proponemos las siguientes opciones:
+Como la etapa final pide hostear una parte, desplegamos el propio monitor: la pagina abre una terminal en el navegador conectada a una copia de la app que corre en un servidor, la misma que se usa en local. Asi el que entra con el link usa el sistema real sin instalar nada, y el proyecto sigue sin dependencias.
 
-- **Informe HTML:** La app genera un archivo .html con toda la informacion y metricas de las operaciones que realizo el usuario. Esta opcion puede extenderse para mostrar en vivo como va determinada operacion, por ejemplo, el PnL actualizandose en vivo, con alertas a remoto basadas en una feed RSS.
-- **Dashboard publico:** Un servidor de datos publicos que se despliega en un servidor Node y puede ser consumido por distintas instalaciones con `fuente: remoto`. Publica datos publicos de mercado, permitiendo ver la informacion en tiempo real, y se podria sumar una visualizacion en tiempo real para chequear las operaciones abiertas a distancia.
+- **`web/servidor.mjs`** - un servidor `node:http` que corre `main.mjs` como proceso por cada visitante, manda su salida al navegador por SSE y le pasa las teclas que llegan por POST
+- **`web/sesion.mjs`** - la app corre en web, no en una terminal, asi que este modulo le pasa el tamaño de la ventana del navegador y le avisa cuando cambia
+- **`web/publico/`** - la pagina, que interpreta ANSI del sustrato, dibuja y traduce teclado/mouse a los bytes que el sustrato lee
+
+La carpeta `web/` envuelve la app sin ser parte de sus capas: solo usa el sustrato para medir el ancho de los caracteres igual que la app, y ningun modulo de la app la importa.

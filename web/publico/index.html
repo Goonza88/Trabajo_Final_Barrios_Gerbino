@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+  
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Outplay - Web Terminal</title>
+
+  <style>
+    :root { --fg: #f0efe7; --bg: #0b1014; --sec: #62798b; }
+    html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+    #pantalla {
+      margin: 0; height: 100%; color: var(--fg); background: var(--bg);
+      font: 15px/1 ui-monospace, 'DejaVu Sans Mono', Menlo, Consolas, monospace;
+      white-space: pre; cursor: default; user-select: none;
+    }
+    #pantalla > div { height: 1em; }
+    #aviso {
+      position: fixed; inset: 0; display: grid; place-items: center; text-align: center;
+      font: 15px/1.6 ui-monospace, 'DejaVu Sans Mono', Menlo, Consolas, monospace;
+      color: var(--sec); background: var(--bg); white-space: pre-line;
+    }
+    #aviso[hidden] { display: none; }
+    #nota {
+      position: fixed; left: 50%; bottom: 1.5em; transform: translateX(-50%); padding: 0.4em 1em;
+      font: 15px/1.4 ui-monospace, 'DejaVu Sans Mono', Menlo, Consolas, monospace;
+      color: var(--fg); background: var(--bg); border: 1px solid var(--sec);
+    }
+    #nota[hidden] { display: none; }
+  </style>
+  
+  <script type="module" src="pagina.mjs"></script>
+</head>
+
+<body>
+  <pre id="pantalla" tabindex="0"></pre>
+  <div id="aviso">conectando...</div>
+  <div id="nota" hidden></div>
+</body>
+
+</html>

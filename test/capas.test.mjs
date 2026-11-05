@@ -37,3 +37,16 @@ test('el backend no importa la interfaz', () => {
     }
   }
 });
+
+test('la terminal web solo usa el sustrato y nadie de la app la importa', () => {
+  for (const modulo of modulos('web')) {
+    for (const ruta of imports(modulo)) {
+      assert.ok(ruta.startsWith('web/') || ruta.startsWith('backend/terminal/'), modulo + ' importa ' + ruta);
+    }
+  }
+  for (const modulo of [...modulos('frontend'), ...modulos('backend'), 'main.mjs']) {
+    for (const ruta of imports(modulo)) {
+      assert.ok(!ruta.startsWith('web/'), modulo + ' importa ' + ruta);
+    }
+  }
+});
