@@ -4,17 +4,57 @@ El sistema es una herramienta de monitoreo y analisis de mercados financieros en
 
 El objetivo no es competir con una plataforma comercial, sino aportar un lugar donde centralizar la informacion que hoy esta repartida entre varias, y permitir que los usuarios puedan extender la herramienta con codigo propio.
 
-La propuesta original planteaba el despliegue 100% local, sin cuentas, dependencias o infraestructura. Esa decision se mantiene ya que es la que ordena todo lo demas.
+La propuesta original planteaba el despliegue 100% local, sin cuentas, dependencias o infraestructura. Esa decision se mantiene para el sistema central ya que es la que ordena todo lo demas, sumando una parte con deploy para cumplir con la consigna.
 
-## 2da y 3ra entrega
+## Integrantes
 
-Comenzamos a trabajar sobre la segunda entrega antes de que se suban los requisitos, por lo que sin saberlo nos adelantamos y pasamos a la implementacion. Ese codigo quedo preservado en la branch `wip/substrato-terminal` hasta que fue reintegrado dentro de la estructura documentada a partir de la tercera entrega.
+- **Facundo Gerbino** - [@octantes](https://github.com/octantes)
+- **Gonzalo Barrios** - [@Goonza88](https://github.com/Goonza88)
 
-- **estructura del repositorio** - este archivo
-- **arquitectura del proyecto** - [`docs/arquitectura.md`](docs/arquitectura.md)
-- **listado de modulos** - [`docs/modulos.md`](docs/modulos.md)
-- **esquema de la base de datos** - [`database/database.md`](database/database.md)
-- **contrato de datos** - [`database/contrato.md`](database/contrato.md)
+## Entrega final
+
+| Documento | Enlace |
+| --------- | ------ |
+| sistema desplegado | pendiente |
+| informe final (PDF) | pendiente |
+| video de presentacion | pendiente |
+| propuesta del trabajo | [`docs/propuesta.md`](docs/propuesta.md) |
+| arquitectura del proyecto | [`docs/arquitectura.md`](docs/arquitectura.md) |
+| listado de modulos | [`docs/modulos.md`](docs/modulos.md) |
+| investigacion de exchanges | [`docs/exchanges.md`](docs/exchanges.md) |
+| esquema de la base de datos | [`database/database.md`](database/database.md) |
+| DDL de la base de datos | [`database/schema.sql`](database/schema.sql) |
+| contrato de datos | [`database/contrato.md`](database/contrato.md) |
+| capa de backend | [`backend/README.md`](backend/README.md) |
+| capa de frontend | [`frontend/README.md`](frontend/README.md) |
+
+## Instalacion, ejecucion y testing
+
+El unico requisito es **Node 24 LTS**. No hay `package.json` ni dependencias, por lo que no hace falta `npm install`.
+
+```sh
+git clone https://github.com/Goonza88/Trabajo_Final_Barrios_Gerbino.git
+cd Trabajo_Final_Barrios_Gerbino
+nvm use                              # toma la version de .nvmrc
+node main.mjs
+```
+
+La pantalla de inicio usa `m` para abrir el monitor (la aplicacion principal), `d` para las demos del substrato y `q` para salir.
+
+El monitor muestra la watchlist a la izquierda, el grafico del simbolo elegido y, al marcar una orden, la caja de la orden. La ayuda con todas las teclas se ve siempre al pie de la lista de simbolos, a la izquierda del grafico.
+
+```sh
+node --test                                     # toda la suite
+find . -name '*.mjs' -exec node --check {} \;   # chequeo de sintaxis
+```
+
+La integracion continua (`.github/workflows/ci.yml`) corre los dos pasos en cada push. Los tests de la capa de datos usan `node:sqlite`, por lo que Node muestra un aviso de modulo experimental que no es un error.
+
+### Variables de entorno
+
+El sistema no usa variables de entorno, claves ni credenciales: los datos de mercado salen de endpoints publicos de Binance. Por eso el repositorio no incluye un `.env`.
+
+## Documentacion y estructura
 
 ```md
 Trabajo_Final_Barrios_Gerbino/
@@ -56,27 +96,27 @@ Trabajo_Final_Barrios_Gerbino/
 └── README.md                     > este archivo
 ```
 
-## Tecnologias
+### Tecnologias
 
 - **Node.js** es el runtime del proyecto y ademas trae el motor de base de datos; mantener todo en node permite que extension y substrato se escriban en el mismo lenguaje
 - **SQLite** a traves del modulo nativo `node:sqlite` - la base de datos del sistema, sin dependencias externas ni servidor
 - **Modulos nativos** ESM con la extension `.mjs`, que permite que los modulos se ejecuten sin depender de la extension del paquete, haciendo innecesario un `package.json`
 
-### Por que `node:sqlite`
-
-Node trae embebido el motor real de SQLite, no un envoltorio, asi que el motor de base de datos completo viene dentro del runtime de forma nativa. Eso nos permite cumplir el requisito de integrar un motor de base de datos real al proyecto, y al mismo tiempo mantener la propuesta sin dependencias.
-
-Esto es distinto de `better-sqlite3`, un paquete de npm que trae el mismo motor como dependencia instalable: necesita `npm install`, un `package.json` y una compilacion, a cambio de una API mas madura y amplia. Si quisieramos pasar a un paquete asi el costo seria bajo, ya que la implementacion de SQL vive en `backend/datos`, por lo que alcanza con reemplazar el import del modulo por el del paquete y sumar el `package.json` sin tocar el esquema o las consultas.
-
-El requisito para utilizar `node:sqlite` es fijar la version de node a **Node 24 LTS**, ya que la API todavia esta marcada como release candidate y podria cambiar entre versiones mayores de Node. Fijar la version mayor evita que un cambio de API rompa el proyecto.
-
-## Decisiones y justificacion
+### Decisiones y justificacion
 
 **Proyecto local, con base de datos, sin dependencias:** El motor viene embebido en Node (`node:sqlite`), se guarda en un solo archivo y no necesita servidor ni instalacion. Ganamos integridad y consultas reales manteniendo el deploy 100% local, acorde a la propuesta de valor.
+
+**Por que `node:sqlite`:** Node trae embebido el motor real de SQLite, no un envoltorio, asi que el motor de base de datos completo viene dentro del runtime de forma nativa. Eso nos permite cumplir el requisito de integrar un motor de base de datos real al proyecto, y al mismo tiempo mantener la propuesta sin dependencias. El unico requisito es fijar la version de node a **Node 24 LTS**.
 
 **No se guardan credenciales:** La conexion con los exchanges se realiza a traves de endpoints publicos que no requieren API key, y no se almacenan contraseñas ni datos sensibles. No se requiere login, y la informacion del usuario esta en la base SQLite (`data/app.db`), portable, facil de respaldar y sin nada que proteger.
 
 **La interfaz es de terminal, no web:** Es la decision que mas diferencia al proyecto, y la mas dificil de implementar. La tesis de la propuesta es justamente que un operador trabaja con la app abierta todo el dia, y necesita centralizar la informacion en un sistema liviano y rapido.
+
+### Limitaciones
+
+- **las operaciones son de practica** - el sistema recibe informacion real y simula las operaciones sobre el precio en vivo, pero no envia las ordenes al exchange
+- **un solo exchange** - los datos salen de los endpoints publicos de Binance, sin ellos no hay precios ni velas
+- **precios por consulta** - las velas y los tickers se piden y actualizan cada 5 segundos
 
 ### Propuesta de Despliegue (Etapa Final)
 
