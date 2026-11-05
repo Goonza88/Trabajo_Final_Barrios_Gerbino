@@ -6,6 +6,7 @@ import { setPalette } from './backend/terminal/ansi.mjs';
 import { PALETA } from './frontend/paleta.mjs';
 import { box, rows, text, gap } from './backend/terminal/widgets.mjs';
 import { crearMonitor } from './frontend/vistas/monitor.mjs';
+import { abrirRegistro } from './backend/dominio/registro.mjs';
 
 setPalette(PALETA);
 
@@ -62,8 +63,13 @@ const home = {
   },
 };
 
+// la base de la sesion web o data/app.db - se cierra al salir
+const registro = abrirRegistro({ path: process.env.BASE_DATOS });
+process.on('exit', () => registro.cerrar());
+
 // el monitor se crea una vez - conserva simbolo, zoom e indicadores entre visitas
 const monitor = crearMonitor({
+  registro,
   symbol: 'BTCUSDT',
   simbolos: ['BTCUSDT', 'ETHUSDT'],
   interval: '1m',

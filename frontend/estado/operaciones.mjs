@@ -1,4 +1,4 @@
-// operaciones de practica de la sesion - borrador, operaciones y eventos en memoria
+// operaciones de practica de la sesion - guardadas en el registro, borrador y eventos en memoria
 
 import { cancelarOperacion, cerrarOperacion, crearOperacion, editarNotas, resumenCartera, seguirOperaciones } from '../../backend/dominio/operaciones.mjs';
 import { editText } from '../../backend/terminal/input.mjs';
@@ -43,10 +43,10 @@ export function filasDiario(estado) {
 }
 
 // suma al estado lo de las operaciones y devuelve sus acciones
-export function crearPractica(estado, { saldoInicial = '100', porcentaje = '10', ahora = Date.now } = {}) {
+export function crearPractica(estado, { saldoInicial = '100', porcentaje = '10', ahora = Date.now, registro, operaciones = [] } = {}) {
   Object.assign(estado, {
     borrador: borradorVacio(),
-    operaciones: [],
+    operaciones,
     eventos: [],
     saldo_inicial: saldoInicial,
     porcentaje,
@@ -54,7 +54,6 @@ export function crearPractica(estado, { saldoInicial = '100', porcentaje = '10',
     // fila elegida del diario y el texto de las notas mientras se editan
     diario: { cursor: 0, notas: null },
   });
-  let ultimoId = 0;
 
   const registrar = eventos => {
     estado.eventos = [...estado.eventos, ...eventos.map(evento => ({ ...evento, en: ahora() }))];
@@ -92,7 +91,7 @@ export function crearPractica(estado, { saldoInicial = '100', porcentaje = '10',
         porcentaje: estado.porcentaje,
         ahora: ahora(),
       });
-      const operacion = { id: ++ultimoId, ...nueva };
+      const operacion = registro.registrarOperacion(nueva);
       estado.operaciones = [...estado.operaciones, operacion];
       registrar([{ tipo: 'creada', operacion }]);
       descartarBorrador();
@@ -103,18 +102,20 @@ export function crearPractica(estado, { saldoInicial = '100', porcentaje = '10',
 
   // activa y cierra las operaciones de un simbolo con sus velas y precio actual
   function seguir(symbol, velas, precio) {
-    const { operaciones, eventos } = seguirOperaciones(estado.operaciones, { symbol, velas, precio, ahora: ahora() });
+    const anteriores = estado.operaciones;
+    const { operaciones, eventos } = seguirOperaciones(anteriores, { symbol, velas, precio, ahora: ahora() });
     if (!eventos.length) return;
-    estado.operaciones = operaciones;
+    estado.operaciones = operaciones.map((operacion, i) => operacion === anteriores[i] ? operacion : registro.guardarOperacion(anteriores[i], operacion));
     registrar(eventos);
   }
 
   const seleccionada = () => filasDiario(estado)[estado.diario.cursor] ?? null;
 
-  // reemplaza una operacion por su version nueva y anota el evento si hay
+  // guarda la version nueva de una operacion, la reemplaza y anota el evento si hay
   function actualizar(operacion, tipo) {
-    estado.operaciones = estado.operaciones.map(actual => actual.id === operacion.id ? operacion : actual);
-    if (tipo) registrar([{ tipo, operacion }]);
+    const guardada = registro.guardarOperacion(estado.operaciones.find(actual => actual.id === operacion.id), operacion);
+    estado.operaciones = estado.operaciones.map(actual => actual.id === guardada.id ? guardada : actual);
+    if (tipo) registrar([{ tipo, operacion: guardada }]);
   }
 
   // corre una accion sobre la fila elegida - si no se puede queda el error

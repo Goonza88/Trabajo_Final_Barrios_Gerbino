@@ -26,24 +26,29 @@ function symbolsValidos(symbols) {
   return lista;
 }
 
-export function crearCargarVelas({ conectores = CONECTORES_VELAS, normalizar = normalizarKlines } = {}) {
+// guardar recibe lo normalizado, para persistirlo antes de entregarlo
+export function crearCargarVelas({ conectores = CONECTORES_VELAS, normalizar = normalizarKlines, guardar = null } = {}) {
   return async function cargarVelas({ exchange_id = 'binance', symbol, interval, limit, signal } = {}) {
     const pedir = conectores[exchange_id];
     if (!pedir) throw new Error('exchange no soportado: ' + exchange_id);
 
     const raw = await pedir({ symbol, interval, limit, signal });
-    return normalizar(raw, { exchange_id, symbol, interval });
+    const velas = normalizar(raw, { exchange_id, symbol, interval });
+    guardar?.(velas);
+    return velas;
   };
 }
 
-export function crearCargarTickers({ conectores = CONECTORES_TICKERS, normalizar = normalizarTickers } = {}) {
+export function crearCargarTickers({ conectores = CONECTORES_TICKERS, normalizar = normalizarTickers, guardar = null } = {}) {
   return async function cargarTickers({ exchange_id = 'binance', symbols, signal } = {}) {
     const pedir = conectores[exchange_id];
     if (!pedir) throw new Error('exchange no soportado: ' + exchange_id);
 
     const lista = symbolsValidos(symbols);
     const raw = await pedir({ symbols: lista, signal });
-    return normalizar(raw, { exchange_id });
+    const tickers = normalizar(raw, { exchange_id });
+    guardar?.(tickers);
+    return tickers;
   };
 }
 

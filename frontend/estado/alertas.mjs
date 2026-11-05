@@ -1,4 +1,4 @@
-// alertas de nivel de la sesion y avisos de las que se dispararon - en memoria
+// alertas de nivel de la sesion y avisos de las que se dispararon - guardadas en el registro
 
 import { crearAlerta, seguirAlertas } from '../../backend/dominio/alertas.mjs';
 
@@ -9,9 +9,8 @@ export function alertasDiario(estado) {
 }
 
 // suma al estado alertas y avisos y devuelve acciones
-export function crearAlertas(estado, { ahora = Date.now } = {}) {
-  Object.assign(estado, { alertas: [], avisos: [] });
-  let ultimoId = 0;
+export function crearAlertas(estado, { ahora = Date.now, registro, alertas = [] } = {}) {
+  Object.assign(estado, { alertas, avisos: [] });
 
   // alerta en nivel - cruce del ultimo precio, si no queda el error
   function agregarAlerta(valor) {
@@ -26,7 +25,7 @@ export function crearAlertas(estado, { ahora = Date.now } = {}) {
         timeframe: estado.interval,
         ahora: ahora(),
       });
-      estado.alertas = [...estado.alertas, { id: ++ultimoId, ...alerta }];
+      estado.alertas = [...estado.alertas, registro.registrarAlerta(alerta)];
     } catch (e) {
       estado.error_orden = { mensaje: e.message, en: ahora() };
     }
@@ -34,11 +33,13 @@ export function crearAlertas(estado, { ahora = Date.now } = {}) {
 
   // dispara alertas de un simbolo y un aviso por cada una
   function seguir(symbol, velas, precio) {
-    const { alertas, eventos } = seguirAlertas(estado.alertas, { symbol, velas, precio, ahora: ahora() });
+    const anteriores = estado.alertas;
+    const { alertas, eventos } = seguirAlertas(anteriores, { symbol, velas, precio, ahora: ahora() });
     if (!eventos.length) return;
-    estado.alertas = alertas;
-    estado.avisos = [...estado.avisos, ...eventos.map(evento => evento.alerta)];
-    estado.eventos = [...estado.eventos, ...eventos.map(evento => ({ ...evento, en: ahora() }))];
+    estado.alertas = alertas.map((alerta, i) => alerta === anteriores[i] ? alerta : registro.guardarAlerta(anteriores[i], alerta));
+    const disparadas = eventos.map(evento => estado.alertas.find(alerta => alerta.id === evento.alerta.id));
+    estado.avisos = [...estado.avisos, ...disparadas];
+    estado.eventos = [...estado.eventos, ...eventos.map((evento, i) => ({ ...evento, alerta: disparadas[i], en: ahora() }))];
   }
 
   function descartarAviso() {
@@ -49,6 +50,12 @@ export function crearAlertas(estado, { ahora = Date.now } = {}) {
   function borrarAlertaSeleccionada() {
     const alerta = alertasDiario(estado)[estado.diario.cursor - estado.operaciones.length];
     if (!alerta) return;
+    try {
+      registro.borrarAlerta(alerta.id);
+    } catch (e) {
+      estado.error_orden = { mensaje: e.message, en: ahora() };
+      return;
+    }
     estado.alertas = estado.alertas.filter(actual => actual.id !== alerta.id);
     const total = estado.operaciones.length + estado.alertas.length;
     estado.diario.cursor = Math.max(0, Math.min(total - 1, estado.diario.cursor));

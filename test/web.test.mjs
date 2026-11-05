@@ -146,7 +146,6 @@ test('el inicio web pide la base y el servidor entrega una copia con lo que sigu
   const servidor = crearServidor().listen(0);
   await new Promise(resolve => servidor.once('listening', resolve));
   const base = `http://localhost:${servidor.address().port}`;
-  let db = null;
   try {
     const sesion = await abrir(base, 70, 16);
     await sesion.esperar(() => filaCon(sesion.pantalla, 'b descargar base') >= 0);
@@ -154,14 +153,9 @@ test('el inicio web pide la base y el servidor entrega una copia con lo que sigu
     await sesion.esperar(() => sesion.pantalla.pedidos.length);
     assert.deepEqual(sesion.pantalla.tomarPedidos(), ['7701;descargar-base']);
 
-    const sinBase = await fetch(`${base}/base?id=${sesion.id}`);
-    assert.equal(sinBase.status, 404);
-    assert.match(await sinBase.text(), /todavia no tiene base/);
     assert.equal((await fetch(`${base}/base?id=otra`)).status, 404);
 
-    // la app tiene la base abierta en WAL con una escritura sin pasar al archivo
-    db = new DatabaseSync(servidor.sesiones.get(sesion.id).base);
-    db.exec("PRAGMA journal_mode = WAL; CREATE TABLE prueba (valor TEXT); INSERT INTO prueba VALUES ('hola');");
+    // la app tiene su base abierta en WAL - la watchlist que armo al arrancar todavia no paso al archivo
     const descarga = await fetch(`${base}/base?id=${sesion.id}`);
     assert.equal(descarga.status, 200);
     assert.match(descarga.headers.get('content-disposition'), /filename="app\.db"/);
@@ -170,11 +164,10 @@ test('el inicio web pide la base y el servidor entrega una copia con lo que sigu
     const archivo = path.join(mkdtempSync(path.join(os.tmpdir(), 'descarga-')), 'app.db');
     writeFileSync(archivo, bytes);
     const copia = new DatabaseSync(archivo);
-    assert.equal(copia.prepare('SELECT valor FROM prueba').get().valor, 'hola');
+    assert.deepEqual(copia.prepare('SELECT symbol FROM watchlist_item ORDER BY symbol').all().map(fila => fila.symbol), ['BTCUSDT', 'ETHUSDT']);
     copia.close();
     rmSync(path.dirname(archivo), { recursive: true });
   } finally {
-    db?.close();
     await servidor.apagar();
   }
 });

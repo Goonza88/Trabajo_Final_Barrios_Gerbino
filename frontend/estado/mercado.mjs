@@ -1,11 +1,6 @@
 // estado de sesion de mercado - simbolo, intervalo, watchlist, vista y cargas en segundo plano
 
-import {
-  cargarVelas as pedirVelas,
-  cargarTickers as pedirTickers,
-  cargarSimbolos as pedirSimbolos,
-  validarSimbolo as confirmarSimbolo,
-} from '../../backend/dominio/mercado.mjs';
+import { abrirRegistro } from '../../backend/dominio/registro.mjs';
 import { calcularIndicadores, calcularVariacion } from '../../backend/dominio/indicadores.mjs';
 import { crearPractica } from './operaciones.mjs';
 import { crearAlertas } from './alertas.mjs';
@@ -22,25 +17,33 @@ export function crearEstado({
   simbolos = [symbol],
   interval = '1m',
   limite = 200,
-  cargarVelas = pedirVelas,
-  cargarTickers: cargarTickersFn = pedirTickers,
-  cargarSimbolos = pedirSimbolos,
-  validarSimbolo = confirmarSimbolo,
-  saldoInicial,
+  cargarVelas,
+  cargarTickers: cargarTickersFn,
+  cargarSimbolos,
+  validarSimbolo,
+  saldoInicial = '100',
   porcentaje,
-  ahora = Date.now
+  ahora = Date.now,
+  // sin registro la sesion usa una base en memoria
+  registro = abrirRegistro({ path: ':memory:', ahora })
 } = {}) {
+  cargarVelas ??= registro.mercado.cargarVelas;
+  cargarTickersFn ??= registro.mercado.cargarTickers;
+  cargarSimbolos ??= registro.mercado.cargarSimbolos;
+  validarSimbolo ??= registro.mercado.validarSimbolo;
   const filtrados = Array.isArray(simbolos)
     ? [...new Set(simbolos.filter(s => typeof s === 'string' && s.trim() !== '').map(s => s.trim()))]
     : [];
-  const lista = filtrados.length ? filtrados : [symbol];
-  const inicial = lista.includes(symbol) ? symbol : lista[0];
+  // lo guardado de sesiones anteriores manda sobre lo que llega
+  const sesion = registro.cargarSesion({ simbolos: filtrados.length ? filtrados : [symbol], symbol, interval, saldo_inicial: saldoInicial });
+  const lista = sesion.simbolos.length ? sesion.simbolos : [symbol];
+  const inicial = lista.includes(sesion.symbol) ? sesion.symbol : lista[0];
 
   const estado = {
     exchange_id: 'binance',
     symbol: inicial,
     simbolos: lista,
-    interval,
+    interval: sesion.interval,
     limite,
     velas: [],
     series: calcularIndicadores([]),
@@ -65,8 +68,25 @@ export function crearEstado({
     indicadores: { sma: false, ema: false, rsi: false, volume: false, bollinger: true }
   };
 
-  const practica = crearPractica(estado, { saldoInicial, porcentaje, ahora });
-  const alertas = crearAlertas(estado, { ahora });
+  const practica = crearPractica(estado, { saldoInicial: sesion.saldo_inicial, porcentaje, ahora, registro, operaciones: sesion.operaciones });
+  const alertas = crearAlertas(estado, { ahora, registro, alertas: sesion.alertas });
+
+  // un cambio que no se pudo guardar queda como error de orden - devuelve si se guardo
+  function guardar(accion) {
+    try {
+      accion();
+      return true;
+    } catch (e) {
+      estado.error_orden = { mensaje: e.message, en: ahora() };
+      return false;
+    }
+  }
+
+  const guardarPreferencias = () => guardar(() => registro.guardarPreferencias({
+    symbol: estado.symbol,
+    interval: estado.interval,
+    saldo_inicial: estado.saldo_inicial,
+  }));
 
   // carga en segundo plano - nueva cancela anterior y una respuesta vieja no pisa nueva
   function crearCarga(pedir, aplicar, fallar) {
@@ -179,6 +199,7 @@ export function crearEstado({
   async function setIntervalo(i) {
     if (!estado.intervalos.includes(i)) return;
     estado.interval = i;
+    guardarPreferencias();
     estado.velas = [];
     estado.offset = 0;
     estado.offsetY = 0;
@@ -190,9 +211,12 @@ export function crearEstado({
     estado.cursor = Math.max(0, Math.min(estado.simbolos.length, estado.cursor + delta));
   }
 
-  // suma un simbolo a watchlist, lo deja elegido y pide su ticker
-  function agregarSimbolo(symbol) {
-    if (!estado.simbolos.includes(symbol)) estado.simbolos = [...estado.simbolos, symbol];
+  // suma un simbolo a watchlist, lo deja elegido y pide su ticker - info trae base y quote del exchange
+  function agregarSimbolo(symbol, info) {
+    if (!estado.simbolos.includes(symbol)) {
+      registro.agregarSimbolo(symbol, info);
+      estado.simbolos = [...estado.simbolos, symbol];
+    }
     estado.cursor = estado.simbolos.indexOf(symbol);
     return cargarTickers();
   }
@@ -201,6 +225,7 @@ export function crearEstado({
   function quitarSimbolo() {
     const symbol = estado.simbolos[estado.cursor];
     if (!symbol || estado.simbolos.length === 1) return Promise.resolve(estado);
+    if (!guardar(() => registro.quitarSimbolo(symbol))) return Promise.resolve(estado);
     estado.simbolos = estado.simbolos.filter(actual => actual !== symbol);
     delete estado.tickers[symbol];
     delete estado.variaciones[symbol];
@@ -215,6 +240,7 @@ export function crearEstado({
     estado.symbol = symbol;
     estado.cursor = estado.simbolos.indexOf(symbol);
     if (cambio) {
+      guardarPreferencias();
       practica.descartarBorrador();
       estado.velas = [];
       estado.actualizado_en = null;

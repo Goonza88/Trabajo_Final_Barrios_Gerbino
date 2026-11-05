@@ -45,9 +45,10 @@ export function crearBuscador(estado, { cargarSimbolos, validarSimbolo, agregarS
     buscador.cargando = true;
     buscador.error = null;
     try {
-      await validarSimbolo({ exchange_id: estado.exchange_id, symbol: elegido.symbol });
+      const info = await validarSimbolo({ exchange_id: estado.exchange_id, symbol: elegido.symbol });
+      const carga = agregarSimbolo(elegido.symbol, info);
       cerrarBuscador();
-      await agregarSimbolo(elegido.symbol);
+      await carga;
     } catch (e) {
       if (estado.buscador) Object.assign(estado.buscador, { cargando: false, error: e.message });
     }

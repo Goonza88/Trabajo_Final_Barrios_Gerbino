@@ -25,7 +25,7 @@ graph TD
     UI -->|"pide datos"| DOM
     DOM -.->|"entrega estado y eventos"| UI
     DOM -->|"solicita velas y tickers"| RED
-    RED -->|"REST y WebSocket"| EXCH
+    RED -->|"REST"| EXCH
     RED -.->|"normaliza y entrega"| DOM
     DOM -->|"lee y escribe por repositorios"| DATOS
     DATOS -->|"guarda y consulta"| BD
