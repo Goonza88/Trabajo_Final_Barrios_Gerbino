@@ -130,17 +130,24 @@ export function crearEstado({
     e => { estado.error = e.message; }
   );
 
+  const seguidos = () => [...new Set([
+    ...estado.simbolos,
+    ...estado.operaciones.filter(operacion => operacion.estado === 'abierta' || operacion.estado === 'pendiente').map(operacion => operacion.symbol),
+    ...estado.alertas.filter(alerta => alerta.activa).map(alerta => alerta.symbol),
+  ])];
+
   const tickers = crearCarga(
     signal => cargarTickersFn({
       exchange_id: estado.exchange_id,
-      symbols: estado.simbolos,
+      symbols: seguidos(),
       signal
     }),
     norm => {
+      const previos = estado.tickers;
       const mapa = {};
       const variaciones = {};
       for (const ticker of norm || []) {
-        if (!ticker || !estado.simbolos.includes(ticker.symbol)) continue;
+        if (!ticker || !seguidos().includes(ticker.symbol)) continue;
         mapa[ticker.symbol] = ticker;
         variaciones[ticker.symbol] = calcularVariacion(ticker);
       }
@@ -149,8 +156,10 @@ export function crearEstado({
       // las de otros simbolos siguen con el precio del ticker
       for (const ticker of Object.values(mapa)) {
         if (ticker.symbol === estado.symbol) continue;
-        practica.seguir(ticker.symbol, [], ticker.price);
-        alertas.seguir(ticker.symbol, [], ticker.price);
+        const [low, high] = [previos[ticker.symbol]?.price ?? ticker.price, ticker.price].sort((a, b) => Number(a) - Number(b));
+        const tramo = [{ open_time: ahora(), low, high }];
+        practica.seguir(ticker.symbol, tramo, null);
+        alertas.seguir(ticker.symbol, tramo, null);
       }
       estado.tickers_error = null;
       estado.tickers_actualizado_en = Date.now();

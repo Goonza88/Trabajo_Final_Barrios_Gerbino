@@ -5,10 +5,9 @@ import { sanitize } from '../../backend/terminal/ansi.mjs';
 import { metricasOperaciones, pnlOperacion } from '../../backend/dominio/operaciones.mjs';
 import { errorOrden, filasDiario, preciosActuales } from '../estado/operaciones.mjs';
 import { alertasDiario } from '../estado/alertas.mjs';
-import { fmtPrecio } from './watchlist.mjs';
+import { LADOS, fmtFecha, fmtPrecio, monto } from '../formato.mjs';
 
 const ENCABEZADOS = ['#', 'fecha', 'simbolo', 'lado', 'tipo', 'estado', 'entrada', 'tp', 'sl', 'salida', 'pnl'];
-const LADOS = { compra: 'long', venta: 'short' };
 
 // colores del lado y de los cierres
 const VERDE = { fg: 'success' };
@@ -25,20 +24,6 @@ const PRESCINDIBLES = ['tp', 'sl', 'tipo', 'salida', 'fecha', 'simbolo'];
 // lineas fijas alrededor de la tabla
 const FIJAS = 7;
 
-// monto en dos decimales con signo y color
-function monto(valor) {
-  if (valor == null) return { text: '-' };
-  const numero = Number(valor);
-  return { text: (numero > 0 ? '+' : '') + numero.toFixed(2), style: numero === 0 ? '' : { fg: numero > 0 ? 'success' : 'danger' } };
-}
-
-// dia, mes y hora en 24 horas, o corto
-function fecha(instante) {
-  const d = new Date(instante);
-  const dos = n => String(n).padStart(2, '0');
-  return dos(d.getDate()) + '/' + dos(d.getMonth() + 1) + ' ' + dos(d.getHours()) + ':' + dos(d.getMinutes());
-}
-
 // estado de la operacion, o el motivo si cerro, con colores
 function estadoCelda(operacion) {
   if (operacion.estado !== 'cerrada') return operacion.estado;
@@ -49,7 +34,7 @@ function estadoCelda(operacion) {
 function filaTabla(operacion, precios) {
   return [
     String(operacion.id),
-    fecha(operacion.creada_en),
+    fmtFecha(operacion.creada_en),
     operacion.symbol,
     { text: LADOS[operacion.lado], style: operacion.lado === 'compra' ? VERDE : ROJO },
     operacion.tipo,
@@ -99,7 +84,7 @@ function filaAlerta(alerta) {
     fmtPrecio(alerta.valor),
     { text: arriba ? 'arriba' : 'abajo', style: arriba ? VERDE : ROJO },
     alerta.activa ? 'activa' : { text: 'disparada', style: { fg: 'accent' } },
-    fecha(alerta.ultimo_disparo ?? alerta.created_at),
+    fmtFecha(alerta.ultimo_disparo ?? alerta.created_at),
   ];
 }
 

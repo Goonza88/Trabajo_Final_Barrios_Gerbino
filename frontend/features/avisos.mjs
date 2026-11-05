@@ -3,7 +3,7 @@
 import { box, cols, text } from '../../backend/terminal/widgets.mjs';
 import { textWidth } from '../../backend/terminal/ansi.mjs';
 import { boxSize } from '../../backend/terminal/layout.mjs';
-import { fmtPrecio } from './watchlist.mjs';
+import { fmtPrecio } from '../formato.mjs';
 
 export const ALTO_AVISO = 3;
 

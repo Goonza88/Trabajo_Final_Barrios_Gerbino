@@ -38,7 +38,7 @@ function tramos(texto) {
 }
 
 // una linea de markdown
-export function lineaMarkdown(linea) {
+function lineaMarkdown(linea) {
   const titulo = linea.match(/^(#{1,3})\s+(.*)$/);
   if (titulo) return text(titulo[2], { fg: 'accent', bold: titulo[1].length === 1 });
   const item = linea.match(/^\s*[-*]\s+(.*)$/);

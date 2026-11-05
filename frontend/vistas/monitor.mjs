@@ -8,14 +8,15 @@ import { boxSize } from '../../backend/terminal/layout.mjs';
 import { crearEstado } from '../estado/mercado.mjs';
 import { graficoVelas, leerMira, miraEnVela } from '../graficos/velas.mjs';
 import { tablaVelas } from '../graficos/tabla.mjs';
-import { fmtPrecio, fmtVariacion, vistaWatchlist } from '../features/watchlist.mjs';
+import { vistaWatchlist } from '../features/watchlist.mjs';
+import { fmtFecha, fmtPrecio, fmtVariacion } from '../formato.mjs';
 import { vistaOrden } from '../features/orden.mjs';
 import { vistaBuscador } from '../features/buscador.mjs';
 import { vistaCarga } from './carga.mjs';
 import { capacidadZoom, cantidadVelasVisibles, conGrafico, dimensiones, medidasPanel } from './medidas.mjs';
 import { vistaDiario } from '../features/diario.mjs';
 import { altoNotas, filasNotas, vistaNotas } from '../features/notas.mjs';
-import { errorOrden } from '../estado/operaciones.mjs';
+import { borradorVigente, errorOrden } from '../estado/operaciones.mjs';
 import { INDICADORES, cabecera, indicadoresVisibles, leyendaIndicadores, recuadroInferior } from './indicadores.mjs';
 import { vistaAviso } from '../features/avisos.mjs';
 import { alternarMira, decimalesVisibles, marcarAlerta, marcarEntrada, marcarNivel, moverMiraMouse, moverMiraTeclado } from './mira.mjs';
@@ -197,7 +198,7 @@ function nivelesBorrador(estado) {
   return [
     ...alertas.map(alerta => ({ precio: alerta.valor, style: { fg: 'sec' } })),
     ...vivas.flatMap(operacion => lineasOrden({ ...operacion, entrada: operacion.precio_entrada })),
-    ...lineasOrden(estado.borrador),
+    ...lineasOrden(borradorVigente(estado)),
   ];
 }
 
@@ -232,8 +233,7 @@ function tituloGrafico(estado, opciones) {
     const texto = inicio + fmtPrecio(precio.toFixed(decimalesVisibles(opciones.velas)));
     if (!vela) return texto + ' | vela:- | -';
     const variacion = (Number(vela.close) - Number(vela.open)) / Number(vela.open) * 100;
-    const hora = new Date(vela.open_time).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    return texto + ' | vela:' + fmtVariacion(variacion) + ' | ' + hora;
+    return texto + ' | vela:' + fmtVariacion(variacion) + ' | ' + fmtFecha(vela.open_time);
   }
   const precio = estado.velas.at(-1)?.close ?? estado.tickers[estado.symbol]?.price;
   return inicio + fmtPrecio(precio) + ' | 24h:' + fmtVariacion(estado.variaciones[estado.symbol])

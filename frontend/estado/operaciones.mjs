@@ -2,6 +2,7 @@
 
 import { cancelarOperacion, cerrarOperacion, crearOperacion, editarNotas, resumenCartera, seguirOperaciones } from '../../backend/dominio/operaciones.mjs';
 import { editText } from '../../backend/terminal/input.mjs';
+import { fmtPrecio } from '../formato.mjs';
 
 // orden sin confirmar - tipo y niveles marcados desde la mira
 const NIVELES_BORRADOR = ['take_profit', 'stop_loss'];
@@ -25,6 +26,12 @@ const DURACION_ERROR = 5000;
 export function errorOrden(estado, ahora = Date.now()) {
   const error = estado.error_orden;
   return error && ahora - error.en < DURACION_ERROR ? error.mensaje : null;
+}
+
+export function borradorVigente(estado) {
+  const ultimo = estado.velas.at(-1)?.close;
+  if (estado.borrador.tipo !== 'mercado' || ultimo == null) return estado.borrador;
+  return { ...estado.borrador, entrada: fmtPrecio(ultimo) };
 }
 
 const vivas = operacion => operacion.estado === 'abierta' || operacion.estado === 'pendiente';
@@ -78,7 +85,7 @@ export function crearPractica(estado, { saldoInicial = '100', porcentaje = '10',
   function confirmarBorrador() {
     try {
       const { saldo } = resumenCartera(estado.saldo_inicial, estado.operaciones);
-      const nueva = crearOperacion(estado.borrador, {
+      const nueva = crearOperacion(borradorVigente(estado), {
         exchange_id: estado.exchange_id,
         symbol: estado.symbol,
         saldo,

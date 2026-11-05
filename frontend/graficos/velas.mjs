@@ -4,6 +4,7 @@ import { grid } from '../../backend/terminal/widgets.mjs';
 import { anchoEje, anchoPlot, columnaVela, dibujarEscalon, indiceEnColumna, limitarVelas, putText } from './trazos.mjs';
 import { dibujarVelas } from './cuerpos.mjs';
 import { dibujarNiveles } from './niveles.mjs';
+import { fmtFecha } from '../formato.mjs';
 
 // medidas, velas que entran, series recortadas y escala de precios, compartido por grafico y mira
 function prepararGrafico({ velas, vacias = 0, width, height, showAxis, zoomY, offsetY, indicadores }) {
@@ -128,10 +129,10 @@ export function graficoVelas({
   const labels = [];
 
   function fmtTime(ts) {
-    const d = new Date(ts);
-    if (interval === '1d') return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
-    if (interval === '4h' || interval === '1h') return d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    const fecha = fmtFecha(ts);
+    if (interval === '1d') return fecha.slice(0, 5);
+    if (interval === '4h' || interval === '1h') return fecha;
+    return fecha.slice(6);
   }
 
   if (velas.length > 1) {

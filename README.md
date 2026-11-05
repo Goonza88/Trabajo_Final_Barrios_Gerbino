@@ -44,6 +44,7 @@ Trabajo_Final_Barrios_Gerbino/
 │   ├── estado/                   / el modelo de la app en memoria
 │   ├── features/                 / watchlist en vivo, buscador, orden, diario con notas y avisos
 │   ├── graficos/                 / el grafico de velas, componentes, niveles y logo ascii
+│   ├── formato.mjs               > formato de precios, montos, lados y fechas
 │   ├── paleta.mjs                > los colores del proyecto por rol
 │   ├── vistas/                   / paneles y medidas, navegacion, mira, ayuda y pantalla de carga
 │   └── README.md                 > que entra en esta capa y que no

@@ -3,15 +3,13 @@
 import { box, cols, gap, rows, text } from '../../backend/terminal/widgets.mjs';
 import { padRight, sanitize } from '../../backend/terminal/ansi.mjs';
 import { previsualizarBorrador, resumenCartera } from '../../backend/dominio/operaciones.mjs';
-import { fmtPrecio } from './watchlist.mjs';
-import { errorOrden, preciosActuales } from '../estado/operaciones.mjs';
+import { LADOS, fmtPrecio, monto as celdaMonto } from '../formato.mjs';
+import { borradorVigente, errorOrden, preciosActuales } from '../estado/operaciones.mjs';
 
 export const ANCHO_ORDEN = 30;
 
 // columnas de la etiqueta, los valores van despues
 const ETIQUETA = 12;
-
-const LADOS = { compra: 'long', venta: 'short' };
 
 // hay orden en armado con cualquier entrada, tp o sl
 export function hayBorrador(borrador) {
@@ -23,10 +21,9 @@ const fila = (etiqueta, ...valores) => cols([text(etiqueta), ...valores], { widt
 
 // monto en dos decimales - con signo y color si es un resultado
 function monto(valor, resultado = true) {
-  if (valor == null) return text('-');
-  const numero = Number(valor);
-  if (!resultado) return text(numero.toFixed(2));
-  return text((numero > 0 ? '+' : '') + numero.toFixed(2), numero === 0 ? '' : { fg: numero > 0 ? 'success' : 'danger' });
+  if (!resultado) return text(valor == null ? '-' : Number(valor).toFixed(2));
+  const celda = celdaMonto(valor);
+  return text(celda.text, celda.style);
 }
 
 // ganancia:perdida, la ganancia en verde y la perdida en rojo
@@ -38,7 +35,7 @@ function ratio(valor) {
 export function vistaOrden(estado, { width, height }) {
   const enfocada = estado.foco === 'orden';
   const marco = { border: 'round', pad: [0, 1], width, height, borderStyle: { fg: enfocada ? 'accent' : 'sec' } };
-  const { borrador } = estado;
+  const borrador = borradorVigente(estado);
   const cartera = resumenCartera(estado.saldo_inicial, estado.operaciones, preciosActuales(estado));
   const previa = previsualizarBorrador(borrador, { saldo: cartera.saldo, porcentaje: estado.porcentaje });
   const nivel = (precio, fg) => text(fmtPrecio(precio), precio == null ? '' : { fg });

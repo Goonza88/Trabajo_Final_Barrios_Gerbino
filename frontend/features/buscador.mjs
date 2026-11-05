@@ -4,7 +4,7 @@ import { box, gap, input, rows, table, text } from '../../backend/terminal/widge
 import { boxSize } from '../../backend/terminal/layout.mjs';
 import { sanitize } from '../../backend/terminal/ansi.mjs';
 import { resultadosBuscador } from '../estado/buscador.mjs';
-import { fmtPrecio } from './watchlist.mjs';
+import { fmtPrecio } from '../formato.mjs';
 
 export const ANCHO_BUSCADOR = 30;
 

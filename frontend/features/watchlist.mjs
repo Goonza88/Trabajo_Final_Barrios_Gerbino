@@ -3,18 +3,8 @@
 import { box, gap, rows, table, text } from '../../backend/terminal/widgets.mjs';
 import { boxSize } from '../../backend/terminal/layout.mjs';
 import { sanitize, textWidth } from '../../backend/terminal/ansi.mjs';
+import { fmtPrecio, fmtVariacion } from '../formato.mjs';
 
-// el dominio entrega decimales simples - para mostrarlos se sacan los ceros de mas
-export function fmtPrecio(precio) {
-  if (precio == null) return '-';
-  const texto = String(precio);
-  return texto.includes('.') ? texto.replace(/\.?0+$/, '') : texto;
-}
-
-export function fmtVariacion(valor) {
-  if (valor == null) return '-';
-  return (valor > 0 ? '+' : '') + valor.toFixed(2) + '%';
-}
 
 // ancho minimo para que ninguna linea de ayuda se corte ni haga wrap, plegada o no
 export function anchoWatchlist(ayuda = []) {
