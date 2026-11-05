@@ -7,13 +7,12 @@ import { box, rows, text } from '../backend/terminal/widgets.mjs';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-// captura lo escrito con escapes (runtime) y deja pasar lo demas (reporter)
+// captura los textos con escapes y deja pasar lo demas
 function espiar() {
   const escritos = [];
   const original = process.stdout.write;
   process.stdout.write = function (chunk, ...rest) {
-    const texto = String(chunk);
-    if (texto.includes('\x1b')) { escritos.push(texto); return true; }
+    if (typeof chunk === 'string' && chunk.includes('\x1b')) { escritos.push(chunk); return true; }
     return original.call(process.stdout, chunk, ...rest);
   };
   return { escritos, restaurar: () => { process.stdout.write = original; } };

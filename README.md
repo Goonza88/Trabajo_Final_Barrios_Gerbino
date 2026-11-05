@@ -42,10 +42,10 @@ Trabajo_Final_Barrios_Gerbino/
 │   └── propuesta.md              > la propuesta del trabajo, primera entrega
 ├── frontend/                     # la capa de interfaz
 │   ├── estado/                   / el modelo de la app en memoria
-│   ├── features/                 / watchlist en vivo y pantallas de alta de alertas, operaciones y notas
-│   ├── graficos/                 / el grafico de velas y el informe HTML
+│   ├── features/                 / watchlist en vivo, buscador, orden, diario con notas y avisos
+│   ├── graficos/                 / el grafico de velas, componentes, niveles y logo ascii
 │   ├── paleta.mjs                > los colores del proyecto por rol
-│   ├── vistas/                   / paneles, navegacion, tablas y ayuda
+│   ├── vistas/                   / paneles y medidas, navegacion, mira, ayuda y pantalla de carga
 │   └── README.md                 > que entra en esta capa y que no
 ├── test/                         # la suite de tests
 │   └── *.test.mjs                > tests para todas las capas - se ejecutan con node --test

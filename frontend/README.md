@@ -6,7 +6,7 @@ Para mantener la regla de *cada capa solo pide a la inferior, no a la superior*,
 
 ## Estructura
 
-- El modelo de la app se ubicara en `estado/`, gestionando el estado de la sesion, el simbolo e intervalo que esta siendo usado, la watchlist, y el registro de eventos
-- En `features/` se ubicaran las pantallas donde el usuario escribe, como la watchlist, el CRUD de alertas, diario de operaciones, notas y buscador de simbolos
-- En `graficos/` se gestionara el grafico de velas, con el precio, indicadores y la forma de exportar el informe HTML
-- En `vistas/` se diseñaran los paneles y la navegacion, con las divisiones de pantalla, la tabla con metricas, el detalle de cada simbolo y la ayuda
+- El modelo de la app se ubicara en `estado/`, gestionando el estado de la sesion, el simbolo e intervalo que esta siendo usado, la watchlist, las operaciones de practica, las alertas y el registro de eventos
+- En `features/` se ubicaran las pantallas donde el usuario escribe, como la watchlist, la orden, el diario de operaciones con sus notas y alertas, los avisos y el buscador de simbolos
+- En `graficos/` se gestionara el grafico de velas, con el precio, indicadores, niveles de ordenes y alertas, y el logo
+- En `vistas/` se diseñaran los paneles y la navegacion, con las divisiones de pantalla y sus medidas, la mira, las cajas de indicadores, el detalle de cada simbolo, la ayuda y la pantalla de carga
