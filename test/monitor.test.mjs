@@ -375,3 +375,39 @@ test('v pone una alerta en la mira, al cruzarla aparece el aviso arriba y se des
   app.update(estado, tecla('Backspace'));
   assert.equal(estado.alertas.length, 0, 'Backspace borra la alerta elegida');
 });
+
+test('Enter en agregar abre el buscador a la derecha, se escribe y Enter suma el simbolo; Backspace lo quita', async () => {
+  const app = crearMonitor({
+    simbolos: ['BTCUSDT'],
+    salir: () => {},
+    cargarVelas: async () => [],
+    cargarTickers: async () => [],
+    cargarSimbolos: async () => ['SOLUSDT', 'SOLBTC', 'QNTUSDT'].map(symbol => ({ symbol, price: '1.5' })),
+    validarSimbolo: async ({ symbol }) => ({ symbol }),
+  });
+  const estado = app.update(null, tecla('sin-atajo'));
+  const pantalla = () => flatten(app.view(estado), 120, 30).map(linea => sanitize(linea.content));
+
+  app.update(estado, tecla('Tab'));
+  app.update(estado, tecla('j'));
+  assert.ok(pantalla().some(linea => linea.includes('+ agregar')));
+  app.update(estado, tecla('Enter'));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.ok(estado.buscador);
+  assert.ok(pantalla().some(linea => linea.includes('agregar simbolo')), 'el buscador abre a la derecha');
+
+  for (const letra of 'q') app.update(estado, tecla(letra));
+  assert.equal(estado.borrador.take_profit, null, 'mientras se busca las teclas escriben');
+  assert.ok(pantalla().some(linea => /QNTUSDT\s+1\.5/.test(linea)), 'lista los que coinciden con su precio');
+  app.update(estado, tecla('Backspace'));
+  for (const letra of 'sol') app.update(estado, tecla(letra));
+  app.update(estado, tecla('Enter'));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(estado.buscador, null);
+  assert.deepEqual(estado.simbolos, ['BTCUSDT', 'SOLUSDT']);
+  assert.ok(pantalla().some(linea => linea.includes('SOLUSDT')), 'el nuevo aparece en la watchlist');
+
+  app.update(estado, tecla('Backspace'));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(estado.simbolos, ['BTCUSDT'], 'Backspace en la watchlist quita el elegido');
+});

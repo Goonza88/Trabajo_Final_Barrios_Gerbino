@@ -5,6 +5,7 @@ import { anchoPlot } from '../graficos/trazos.mjs';
 import { anchoWatchlist } from '../features/watchlist.mjs';
 import { ANCHO_ORDEN, hayBorrador } from '../features/orden.mjs';
 import { ALTO_AVISO } from '../features/avisos.mjs';
+import { ANCHO_BUSCADOR } from '../features/buscador.mjs';
 import { inferioresVisibles, medidasInferiores } from './indicadores.mjs';
 
 // el grafico se ve si no fue reemplazado por otro panel central
@@ -13,9 +14,12 @@ export const conGrafico = estado => !estado.modoTabla && !estado.modoDiario;
 // anchos de watchlist, grafico y orden pendiente - grafico conserva 40 columnas
 export function dimensiones(estado, cols, ayuda) {
   const watchW = Math.max(anchoWatchlist(ayuda), Math.min(32, Math.floor(cols * 0.38)));
-  const ordenW = hayBorrador(estado.borrador) && cols - watchW - ANCHO_ORDEN - 2 >= 40 ? ANCHO_ORDEN : 0;
-  const chartW = Math.max(1, cols - watchW - 1 - (ordenW ? ordenW + 1 : 0));
-  return { watchW, chartW, ordenW };
+  // a la derecha buscador, si no la orden
+  const buscadorW = estado.buscador ? ANCHO_BUSCADOR : 0;
+  const ordenW = !buscadorW && hayBorrador(estado.borrador) && cols - watchW - ANCHO_ORDEN - 2 >= 40 ? ANCHO_ORDEN : 0;
+  const derechaW = buscadorW || ordenW;
+  const chartW = Math.max(1, cols - watchW - 1 - (derechaW ? derechaW + 1 : 0));
+  return { watchW, chartW, ordenW, buscadorW };
 }
 
 // velas que entran en el grafico segun el ancho de terminal

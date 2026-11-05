@@ -1,4 +1,4 @@
-// conector REST de binance - pide velas y tickers de 24h
+// conector REST de binance - pide velas, tickers de 24h, precios y datos de simbolos
 
 const BASE_URL = 'https://data-api.binance.vision/api/v3';
 const TIMEOUT_MS = 10000;
@@ -56,7 +56,23 @@ export function crearBinance({ fetch: fetchFn = globalThis.fetch, baseUrl = BASE
     return pedirJson('/ticker/24hr', { symbols: JSON.stringify(lista) }, { signal, timeout });
   }
 
-  return { klines, tickers24h };
+  // ultimo precio de todos los simbolos, tambien de los que ya no operan
+  async function precios({ signal, timeout = TIMEOUT_MS } = {}) {
+    return pedirJson('/ticker/price', {}, { signal, timeout });
+  }
+
+  // datos de un simbolo - binance responde 400 si no existe
+  async function infoSimbolo({ symbol, signal, timeout = TIMEOUT_MS } = {}) {
+    if (typeof symbol !== 'string' || symbol.trim() === '') throw new Error('binance: symbol invalido');
+    try {
+      return await pedirJson('/exchangeInfo', { symbol: symbol.trim() }, { signal, timeout });
+    } catch (error) {
+      if (/^binance http 400/.test(error.message)) throw new Error('simbolo inexistente: ' + symbol.trim());
+      throw error;
+    }
+  }
+
+  return { klines, tickers24h, precios, infoSimbolo };
 }
 
-export const { klines, tickers24h } = crearBinance();
+export const { klines, tickers24h, precios, infoSimbolo } = crearBinance();

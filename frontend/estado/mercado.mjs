@@ -1,9 +1,15 @@
 // estado de sesion de mercado - simbolo, intervalo, watchlist, vista y cargas en segundo plano
 
-import { cargarVelas as pedirVelas, cargarTickers as pedirTickers } from '../../backend/dominio/mercado.mjs';
+import {
+  cargarVelas as pedirVelas,
+  cargarTickers as pedirTickers,
+  cargarSimbolos as pedirSimbolos,
+  validarSimbolo as confirmarSimbolo,
+} from '../../backend/dominio/mercado.mjs';
 import { calcularIndicadores, calcularVariacion } from '../../backend/dominio/indicadores.mjs';
 import { crearPractica } from './operaciones.mjs';
 import { crearAlertas } from './alertas.mjs';
+import { crearBuscador } from './buscador.mjs';
 
 // limites del zoom horizontal, en velas visibles
 const ZOOM_X = Object.freeze({ min: 20, max: 160, paso: 5 });
@@ -18,6 +24,8 @@ export function crearEstado({
   limite = 200,
   cargarVelas = pedirVelas,
   cargarTickers: cargarTickersFn = pedirTickers,
+  cargarSimbolos = pedirSimbolos,
+  validarSimbolo = confirmarSimbolo,
   saldoInicial,
   porcentaje,
   ahora = Date.now
@@ -152,6 +160,7 @@ export function crearEstado({
 
   const cargar = velas.cargar;
   const cargarTickers = tickers.cargar;
+  const buscador = crearBuscador(estado, { cargarSimbolos, validarSimbolo, agregarSimbolo });
 
   function cancelar() {
     velas.cancelar();
@@ -167,9 +176,28 @@ export function crearEstado({
     await cargar();
   }
 
+  // el cursor llega hasta agregar, despues del ultimo simbolo
   function moverCursor(delta) {
-    if (!estado.simbolos.length) return;
-    estado.cursor = Math.max(0, Math.min(estado.simbolos.length - 1, estado.cursor + delta));
+    estado.cursor = Math.max(0, Math.min(estado.simbolos.length, estado.cursor + delta));
+  }
+
+  // suma un simbolo a watchlist, lo deja elegido y pide su ticker
+  function agregarSimbolo(symbol) {
+    if (!estado.simbolos.includes(symbol)) estado.simbolos = [...estado.simbolos, symbol];
+    estado.cursor = estado.simbolos.indexOf(symbol);
+    return cargarTickers();
+  }
+
+  // quita el simbolo - siempre queda al menos uno
+  function quitarSimbolo() {
+    const symbol = estado.simbolos[estado.cursor];
+    if (!symbol || estado.simbolos.length === 1) return Promise.resolve(estado);
+    estado.simbolos = estado.simbolos.filter(actual => actual !== symbol);
+    delete estado.tickers[symbol];
+    delete estado.variaciones[symbol];
+    estado.cursor = Math.min(estado.cursor, estado.simbolos.length - 1);
+    if (symbol !== estado.symbol) return Promise.resolve(estado);
+    return seleccionar(estado.simbolos[estado.cursor]);
   }
 
   async function seleccionar(symbol) {
@@ -296,6 +324,10 @@ export function crearEstado({
     cancelarSeleccionada: practica.cancelarSeleccionada,
     empezarNotas: practica.empezarNotas,
     teclearNotas: practica.teclearNotas,
+    agregarSimbolo,
+    quitarSimbolo,
+    abrirBuscador: buscador.abrirBuscador,
+    teclearBuscador: buscador.teclearBuscador,
     agregarAlerta: alertas.agregarAlerta,
     descartarAviso: alertas.descartarAviso,
     borrarAlertaSeleccionada: alertas.borrarAlertaSeleccionada,

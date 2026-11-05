@@ -242,8 +242,10 @@ test('moverCursor y seleccionarCursor eligen dentro de la watchlist', async () =
   moverCursor(1);
   assert.equal(estado.cursor, 1);
   moverCursor(1);
-  assert.equal(estado.cursor, 1);
-  moverCursor(-2);
+  assert.equal(estado.cursor, 2, 'la fila de agregar va despues del ultimo simbolo');
+  moverCursor(1);
+  assert.equal(estado.cursor, 2);
+  moverCursor(-3);
   assert.equal(estado.cursor, 0);
 
   moverCursor(1);
@@ -424,4 +426,64 @@ test('el error de una orden se ve unos segundos y despues se va solo', () => {
   assert.match(errorOrden(estado, 1000), /falta take profit/);
   assert.match(errorOrden(estado, 5999), /falta take profit/);
   assert.equal(errorOrden(estado, 6000), null);
+});
+
+test('el buscador pide la lista una vez, filtra al escribir y suma el elegido si el exchange lo opera', async () => {
+  let pedidos = 0;
+  const { estado, abrirBuscador, teclearBuscador } = crearEstado({
+    simbolos: ['BTCUSDT'],
+    cargarVelas: async () => [],
+    cargarTickers: async () => [],
+    cargarSimbolos: async () => {
+      pedidos++;
+      return ['SOLUSDT', 'SOLBTC', 'VIEJOUSDT', 'BTCUSDT'].map(symbol => ({ symbol, price: '1' }));
+    },
+    validarSimbolo: async ({ symbol }) => {
+      if (symbol === 'VIEJOUSDT') throw new Error('simbolo sin operar: VIEJOUSDT');
+      return { symbol };
+    },
+  });
+  await abrirBuscador();
+  assert.equal(estado.buscador.cargando, false);
+  for (const letra of 'sol') teclearBuscador(letra);
+  assert.equal(estado.buscador.texto, 'SOL', 'escribe en mayusculas');
+  teclearBuscador('ArrowDown');
+  assert.equal(estado.buscador.cursor, 1);
+  teclearBuscador('ArrowUp');
+  await teclearBuscador('Enter');
+  assert.equal(estado.buscador, null, 'al sumar se cierra');
+  assert.deepEqual(estado.simbolos, ['BTCUSDT', 'SOLUSDT']);
+  assert.equal(estado.cursor, 1);
+
+  await abrirBuscador();
+  assert.equal(pedidos, 1, 'la lista se pide una sola vez');
+  for (const letra of 'viejo') teclearBuscador(letra);
+  await teclearBuscador('Enter');
+  assert.match(estado.buscador.error, /simbolo sin operar/);
+  teclearBuscador('Esc');
+  assert.equal(estado.buscador, null);
+
+  await abrirBuscador();
+  for (const letra of 'btcusdt') teclearBuscador(letra);
+  await teclearBuscador('Enter');
+  assert.match(estado.buscador.error, /ya esta en la watchlist: BTCUSDT/);
+});
+
+test('quitar deja al menos un simbolo y si era el del grafico pasa al de al lado', async () => {
+  const { estado, moverCursor, quitarSimbolo } = crearEstado({
+    simbolos: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'],
+    cargarVelas: async () => [],
+    cargarTickers: async () => [],
+  });
+  moverCursor(1);
+  await quitarSimbolo();
+  assert.deepEqual(estado.simbolos, ['BTCUSDT', 'SOLUSDT']);
+  assert.equal(estado.symbol, 'BTCUSDT', 'quitar otro no cambia el grafico');
+
+  moverCursor(-1);
+  await quitarSimbolo();
+  assert.deepEqual(estado.simbolos, ['SOLUSDT']);
+  assert.equal(estado.symbol, 'SOLUSDT', 'el grafico pasa al que queda');
+  await quitarSimbolo();
+  assert.deepEqual(estado.simbolos, ['SOLUSDT'], 'el ultimo no se quita');
 });

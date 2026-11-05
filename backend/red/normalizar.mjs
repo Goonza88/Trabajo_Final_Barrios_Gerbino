@@ -91,3 +91,28 @@ export function normalizarTickers(tickers, meta) {
   if (tickers && typeof tickers === 'object') return [normalizarTicker(tickers, meta)];
   throw new Error('normalizarTicker: ticker invalido');
 }
+
+// precios de los simbolos, un decimal por simbolo
+export function normalizarPrecios(precios, { exchange_id = 'binance' } = {}) {
+  const prefijo = 'normalizarPrecios';
+  if (!Array.isArray(precios)) throw new Error(prefijo + ': se espera una lista de precios');
+  return precios.map(raw => ({
+    exchange_id,
+    symbol: texto(raw?.symbol, 'symbol', prefijo),
+    price: decimal(raw?.price, 'price', prefijo),
+  }));
+}
+
+// simbolo con la forma del contrato y si hoy se puede operar
+export function normalizarSimbolo(info, { exchange_id = 'binance' } = {}) {
+  const prefijo = 'normalizarSimbolo';
+  const raw = info?.symbols?.[0];
+  if (!raw || typeof raw !== 'object') throw new Error(prefijo + ': simbolo invalido');
+  return {
+    exchange_id,
+    symbol: texto(raw.symbol, 'symbol', prefijo),
+    base: texto(raw.baseAsset, 'base', prefijo),
+    quote: texto(raw.quoteAsset, 'quote', prefijo),
+    operable: raw.status === 'TRADING',
+  };
+}

@@ -43,11 +43,13 @@ export function vistaWatchlist(estado, { width, height, ayuda }) {
     borderStyle: estado.foco === 'watchlist' ? { fg: 'accent' } : null
   };
   const { innerH } = boxSize(marco, width);
-  const { simbolos, tickers, cursor } = estado;
+  const { tickers, cursor } = estado;
+  // despues de simbolos va fila para agregar, null en la lista
+  const simbolos = [...estado.simbolos, null];
   const error = estado.tickers_error ? sanitize(estado.tickers_error) : null;
   const alto = innerH;
   const extraError = error ? 1 : 0;
-  // la ayuda se achica hasta que entren todos los simbolos, y si ni plegada entran, la lista se desplaza
+  // la ayuda se achica hasta que entren todos los simbolos
   const formas = formasAyuda(ayuda);
   const ayudas = formas.find(forma => alto >= 4 + Math.max(1, simbolos.length) + forma.length + extraError)
     ?? formas.at(-1);
@@ -58,6 +60,7 @@ export function vistaWatchlist(estado, { width, height, ayuda }) {
   const inicio = maxFilas > 0 ? Math.max(0, Math.min(cursor - maxFilas + 1, maxInicio)) : 0;
   const visibles = maxFilas > 0 ? simbolos.slice(inicio, inicio + maxFilas) : [];
   const filas = visibles.map((symbol, i) => {
+    if (symbol == null) return [{ text: '+ agregar', style: { fg: inicio + i === cursor ? 'accent' : 'sec' } }, '', ''];
     const ticker = tickers[symbol];
     const valor = estado.variaciones[symbol];
     const estiloValor = valor == null || valor === 0 ? null : { fg: valor > 0 ? 'success' : 'danger' };

@@ -10,6 +10,7 @@ import { graficoVelas, leerMira, miraEnVela } from '../graficos/velas.mjs';
 import { tablaVelas } from '../graficos/tabla.mjs';
 import { fmtPrecio, fmtVariacion, vistaWatchlist } from '../features/watchlist.mjs';
 import { vistaOrden } from '../features/orden.mjs';
+import { vistaBuscador } from '../features/buscador.mjs';
 import { vistaCarga } from './carga.mjs';
 import { capacidadZoom, cantidadVelasVisibles, conGrafico, dimensiones, medidasPanel } from './medidas.mjs';
 import { vistaDiario } from '../features/diario.mjs';
@@ -88,9 +89,12 @@ function atajos(intervalos = []) {
   return [
     { atajos: [
       { teclas: ['Enter'], foco: 'watchlist', ayuda: 'Enter - Seleccionar', accion: monitor => {
+        // en fila de agregar abre buscador, en simbolo abre el grafico
+        if (monitor.estado.cursor === monitor.estado.simbolos.length) return alTerminarCarga(monitor.abrirBuscador());
         monitor.setFoco('grafico');
         alTerminarCarga(monitor.seleccionarCursor());
       } },
+      { teclas: ['Backspace', 'Delete'], foco: 'watchlist', ayuda: 'Backspace - Quitar Simbolo', accion: monitor => alTerminarCarga(monitor.quitarSimbolo()) },
       { teclas: ['Tab'], ayuda: 'Tab - Cambiar Foco', accion: monitor => monitor.alternarFoco(focosDisponibles(monitor.estado)) },
       { teclas: ['Enter'], foco: 'orden', accion: conservandoMira(monitor => monitor.confirmarBorrador()) },
     ] },
@@ -116,7 +120,7 @@ function atajos(intervalos = []) {
       { teclas: ['i'], ayuda: 'i - Acercar Vertical', accion: enGrafico(monitor => monitor.zoomV('+')) },
       { teclas: ['o'], ayuda: 'o - Acercar Horizontal', accion: enGrafico(monitor => monitor.zoomH('+', capacidadZoom(monitor.estado, anchosActuales(monitor.estado)))) },
     ] },
-    { resumen: 'q-r - Operacion', atajos: [
+    { resumen: 'q-t - Operacion', atajos: [
       { teclas: ['q'], ayuda: 'q - Take Profit', accion: conservandoMira(conMira((monitor, opciones) => marcarNivel(monitor, opciones, 'take_profit'))) },
       { teclas: ['w'], ayuda: 'w - Entrada Limite', accion: conservandoMira(conMira(marcarEntrada)) },
       { teclas: ['e'], ayuda: 'e - Stop Loss', accion: conservandoMira(conMira((monitor, opciones) => marcarNivel(monitor, opciones, 'stop_loss'))) },
@@ -124,14 +128,6 @@ function atajos(intervalos = []) {
         const ultimo = monitor.estado.velas.at(-1)?.close;
         if (ultimo != null) monitor.fijarEntrada('mercado', fmtPrecio(ultimo));
       })) },
-    ] },
-    { resumen: rango(teclasIntervalo) + ' - Intervalos', atajos: teclasIntervalo.map((tecla, i) => ({
-      teclas: [tecla],
-      ayuda: tecla + ' - Intervalo ' + intervalos[i],
-      accion: monitor => alTerminarCarga(monitor.setIntervalo(intervalos[i])),
-    })) },
-    { atajos: [
-      { teclas: ['z'], ayuda: 'z - Vista de Tabla', accion: monitor => monitor.alternarTabla() },
       { teclas: ['t'], ayuda: 't - Diario', accion: monitor => monitor.alternarDiario() },
       // acciones sobre la fila elegida del diario, las anuncia el propio diario
       { teclas: ['m'], foco: 'grafico', accion: enDiario(monitor => monitor.cerrarSeleccionada()) },
@@ -140,6 +136,14 @@ function atajos(intervalos = []) {
         monitor.borrarAlertaSeleccionada();
       }) },
       { teclas: ['Enter'], foco: 'grafico', accion: enDiario(monitor => monitor.empezarNotas(filasNotas(size().rows))) },
+    ] },
+    { resumen: rango(teclasIntervalo) + ' - Intervalos', atajos: teclasIntervalo.map((tecla, i) => ({
+      teclas: [tecla],
+      ayuda: tecla + ' - Intervalo ' + intervalos[i],
+      accion: monitor => alTerminarCarga(monitor.setIntervalo(intervalos[i])),
+    })) },
+    { atajos: [
+      { teclas: ['z'], ayuda: 'z - Vista de Tabla', accion: monitor => monitor.alternarTabla() },
       { teclas: ['x'], ayuda: 'x - Iniciar Mira', accion: enGrafico(monitor => {
         if (conGrafico(monitor.estado)) alternarMira(monitor, opcionesActuales(monitor.estado));
       }) },
@@ -277,15 +281,17 @@ function conAviso(estado, medidas) {
 export function vistaMonitor(estado) {
   const { rows: height } = size();
   const anchos = anchosActuales(estado);
-  const { watchW, ordenW } = anchos;
+  const { watchW, ordenW, buscadorW } = anchos;
+  const derechaW = buscadorW || ordenW;
   return split({
     dir: 'h',
-    sizes: ordenW ? [watchW, null, ordenW] : [watchW, null],
+    sizes: derechaW ? [watchW, null, derechaW] : [watchW, null],
     gap: 1,
     children: [
       vistaWatchlist(estado, { width: watchW, height, ayuda: seccionesAyuda(estado.intervalos) }),
       conAviso(estado, medidasPanel(estado, anchos, height)),
-      ordenW ? vistaOrden(estado, { width: ordenW, height }) : null,
+      buscadorW ? vistaBuscador(estado, { width: buscadorW, height })
+        : ordenW ? vistaOrden(estado, { width: ordenW, height }) : null,
     ].filter(Boolean)
   });
 }
@@ -311,6 +317,12 @@ export function crearMonitor({ salir, sondeoMs = 5000, ...opciones }) {
     subscriptions: [Sub.interval(sondeoMs, 'poll')],
     update: (model, event) => {
       if (event.type === 'key') {
+        // con el buscador abierto cada tecla va al buscador
+        if (estado.buscador) {
+          const resultado = monitor.teclearBuscador(event.key);
+          if (resultado?.then) alTerminarCarga(resultado);
+          return estado;
+        }
         // mientras se editan las notas del diario cada tecla escribe
         if (estado.diario.notas != null) {
           monitor.teclearNotas(event.key);
