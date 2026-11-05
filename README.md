@@ -35,8 +35,7 @@ El unico requisito es **Node 24 LTS**. No hay `package.json` ni dependencias, po
 ```sh
 git clone https://github.com/Goonza88/Trabajo_Final_Barrios_Gerbino.git
 cd Trabajo_Final_Barrios_Gerbino
-nvm use                              # toma la version de .nvmrc
-nvm install                          # la instala si no la tenemos
+nvm install                          # instala y usa la version de .nvmrc
 node main.mjs
 ```
 
@@ -122,6 +121,7 @@ Trabajo_Final_Barrios_Gerbino/
 - **las operaciones son de practica** - el sistema recibe informacion real y simula las operaciones sobre el precio en vivo, pero no envia las ordenes al exchange
 - **un solo exchange** - los datos salen de los endpoints publicos de Binance, sin ellos no hay precios ni velas
 - **precios por consulta** - las velas y los tickers se piden y actualizan cada 5 segundos
+- **sesiones web temporales** - cada visitante tiene su propia base de datos, que se borra al cerrar la sesion si no la descarga manualmente
 
 ### Despliegue
 
@@ -131,4 +131,6 @@ Como la etapa final pide hostear una parte, desplegamos el propio monitor: la pa
 - **`web/sesion.mjs`** - la app corre en web, no en una terminal, asi que este modulo le pasa el tamaño de la ventana del navegador y le avisa cuando cambia
 - **`web/publico/`** - la pagina, que interpreta ANSI del sustrato, dibuja y traduce teclado/mouse a los bytes que el sustrato lee
 
-La carpeta `web/` envuelve la app sin ser parte de sus capas: solo usa el sustrato para medir el ancho de los caracteres igual que la app, y ningun modulo de la app la importa.
+La carpeta `web/` envuelve la app sin ser parte de sus capas: usa el sustrato para medir el ancho de los caracteres igual que la app y copia la db de la sesion del servidor con `VACUUM INTO` para poder descargarla desde el navegador.
+
+Con `b` en la pantalla de inicio se descarga la base de datos, que copiada a `data/app.db` puede usarse en la terminal local.

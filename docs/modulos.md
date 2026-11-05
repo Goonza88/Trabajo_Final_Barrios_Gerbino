@@ -39,6 +39,7 @@ Definimos la prioridad de la siguiente forma:
 | vista de metricas propias | `frontend/features` | panel con metricas de las operaciones | ✓ |
 | notas del usuario | `frontend/features` | observaciones por operacion, con texto markdown | ✓ |
 | ayuda y atajos | `frontend/vistas` | panel de ayuda y la lista de teclas | ✓ |
+| terminal web | `web` | corre el monitor en el navegador, con una db por sesion | ✓ |
 
 ## P2 - Evolucion
 

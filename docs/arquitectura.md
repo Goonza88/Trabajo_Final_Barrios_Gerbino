@@ -33,4 +33,10 @@ graph TD
     TERM -.->|"devuelve eventos"| UI
 ```
 
+## Persistencia
+
 La persistencia es la unica capa que escribe SQL, y el resto del sistema accede a los datos a traves de sus repositorios. La interfaz nunca lee la base: muestra el estado que le entrega el dominio, que tiene los datos que llegan del exchange y la historia que carga de la base. El detalle esta en [`/database/database.md`](../database/database.md).
+
+## Web
+
+La terminal web (`/web`) queda fuera de las capas: corre la app como proceso aparte, usa el sustrato para medir caracteres y copia la base de datos de cada sesion con `VACUUM INTO` para descargarla.

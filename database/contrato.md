@@ -167,6 +167,7 @@ Salvo indicacion contraria, los nombres de los campos son los de las columnas de
 | `activateOperation(id)` | entero | la fila actualizada, con `tags` |
 | `closeOperation(id, cierre)` | entero y `{ precio_salida, motivo_cierre, fees? }` | la fila actualizada, con `tags` |
 | `cancelOperation(id)` | entero | la fila actualizada, con `tags` |
+| `editOperation(id, cambios)` | entero y `{ notas }` | la fila actualizada, con `tags` |
 | `addTag(operacion_id, tag)` | entero y texto | `string[]` de tags |
 | `removeTag(operacion_id, tag)` | entero y texto | `string[]` de tags |
 
@@ -178,6 +179,7 @@ Salvo indicacion contraria, los nombres de los campos son los de las columnas de
 - `activateOperation`: solo sobre `pendiente`; deja `estado = 'abierta'` y pone `abierta_en` con el reloj
 - `closeOperation`: solo sobre `abierta`; deja `estado = 'cerrada'` y guarda `precio_salida`, `motivo_cierre`, `cerrada_en` y, si viene, `fees`; `motivo_cierre` sale de `CLOSE_REASONS`
 - `cancelOperation`: solo sobre `pendiente` o `abierta`; deja `estado = 'cancelada'`, pone `cerrada_en` y deja `precio_salida` y `motivo_cierre` en `null`; conserva `abierta_en` si ya estaba abierta
+- `editOperation`: solo cambia `notas`, en cualquier estado; `null` las borra
 - `addTag` y `removeTag`: la tag no se repite ni falta; devuelven la lista
 - `listOperations` ordena por `id`
 

@@ -191,6 +191,23 @@ test('operaciones: alta, tags, cierre y cancelacion', () => {
   });
 });
 
+test('las notas de una operacion se editan en cualquier estado', () => {
+  conDatos(datos => {
+    const operacion = datos.operations.registerOperation({
+      exchange_id: 'binance', symbol: 'BTCUSDT', lado: 'compra', tipo: 'mercado', cantidad: '1', precio_entrada: '100'
+    });
+    assert.equal(datos.operations.editOperation(operacion.id, { notas: '# idea\nruptura' }).notas, '# idea\nruptura');
+    datos.operations.closeOperation(operacion.id, { precio_salida: '110', motivo_cierre: 'manual' });
+    const cerrada = datos.operations.editOperation(operacion.id, { notas: 'salio bien' });
+    assert.equal(cerrada.notas, 'salio bien');
+    assert.equal(cerrada.estado, 'cerrada');
+    assert.equal(datos.operations.editOperation(operacion.id, { notas: null }).notas, null);
+    assert.throws(() => datos.operations.editOperation(operacion.id, { notas: '  ' }), /texto invalido en notas/);
+    assert.throws(() => datos.operations.editOperation(operacion.id, { estado: 'abierta' }), /campo desconocido: estado/);
+    assert.throws(() => datos.operations.editOperation(999, { notas: 'x' }), /operacion inexistente: 999/);
+  });
+});
+
 test('operaciones de practica: pendiente, activacion y motivos de cierre', () => {
   let instante = 1000;
   const datos = createData({ path: ':memory:', ahora: () => instante });

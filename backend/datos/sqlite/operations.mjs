@@ -17,6 +17,7 @@ import {
   validateNullableDecimal,
   validateEnum,
   validateText,
+  validateNullableText,
   required,
   validateFields,
   validateTags
@@ -121,6 +122,14 @@ export function createOperations(db, clock) {
       const fees = closing.fees == null ? current.fees : validateDecimal(closing.fees, 'fees');
       db.prepare("UPDATE operacion SET estado='cerrada',precio_salida=?,motivo_cierre=?,cerrada_en=?,fees=? WHERE id=?")
         .run(closing.precio_salida, closeReason, now(clock), fees, operation_id);
+      const operation = row(db.prepare('SELECT * FROM operacion WHERE id=?'), operation_id);
+      return oneWithTags(db, 'operacion_tag', 'operacion_id', operation);
+    },
+    editOperation(operation_id, changes) {
+      checkOperation(db, operation_id);
+      validateFields(changes, ['notas']);
+      const notas = validateNullableText(changes?.notas, 'notas');
+      db.prepare('UPDATE operacion SET notas=? WHERE id=?').run(notas, operation_id);
       const operation = row(db.prepare('SELECT * FROM operacion WHERE id=?'), operation_id);
       return oneWithTags(db, 'operacion_tag', 'operacion_id', operation);
     },
